@@ -6,6 +6,11 @@ import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
+from backend.auth import (
+    AuthenticatedUser,
+    get_current_user,
+    require_organizer_or_admin,
+)
 from backend.config import Settings, get_settings
 from backend.database import get_supabase_client
 from backend.schemas.common import TicketStatus
@@ -67,7 +72,9 @@ async def list_events(db: Any = Depends(get_supabase_client)) -> List[Dict[str, 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
 async def create_event(
-    payload: EventCreateRequest, db: Any = Depends(get_supabase_client)
+    payload: EventCreateRequest,
+    _organizer: AuthenticatedUser = Depends(require_organizer_or_admin),
+    db: Any = Depends(get_supabase_client),
 ) -> Dict[str, Any]:
     """Create a new event with organizer resale and 15-day refund window policy."""
     now = datetime.now(timezone.utc)
@@ -105,6 +112,7 @@ async def create_event(
 async def update_resale_config(
     event_id: str,
     payload: EventResaleConfigUpdate,
+    _organizer: AuthenticatedUser = Depends(require_organizer_or_admin),
     db: Any = Depends(get_supabase_client),
 ) -> Dict[str, Any]:
     """Update organizer resale settings (toggle resale, price cap, markup, cutoff)."""
@@ -132,10 +140,15 @@ async def update_resale_config(
 async def purchase_primary_tickets(
     event_id: str,
     payload: PrimaryPurchaseRequest,
+    current_user: AuthenticatedUser = Depends(get_current_user),
     db: Any = Depends(get_supabase_client),
     settings: Settings = Depends(get_settings),
 ) -> Dict[str, Any]:
     """Primary checkout: creates N individually identifiable Metaplex Core ticket records."""
+    if payload.buyer_wallet != current_user.wallet and current_user.role not in ("organizer", "admin"):
+        raise HTTPException(
+            status_code=403, detail="buyer_wallet must match authenticated user."
+        )
     ev_resp = db.table("events").select("*").eq("id", event_id).execute()
     if not ev_resp.data:
         raise HTTPException(status_code=404, detail="Event not found.")
@@ -202,7 +215,9 @@ async def purchase_primary_tickets(
 
 @router.get("/{event_id}/analytics")
 async def get_event_analytics(
-    event_id: str, db: Any = Depends(get_supabase_client)
+    event_id: str,
+    _organizer: AuthenticatedUser = Depends(require_organizer_or_admin),
+    db: Any = Depends(get_supabase_client),
 ) -> Dict[str, Any]:
     """Organizer analytics summary: primary tickets, resale volume, check-ins, refunds."""
     ev_resp = db.table("events").select("*").eq("id", event_id).execute()

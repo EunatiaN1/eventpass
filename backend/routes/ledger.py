@@ -4,13 +4,17 @@ from typing import Any, Dict
 
 from fastapi import APIRouter, Depends
 
+from backend.auth import AuthenticatedUser, require_organizer_or_admin
 from backend.database import get_supabase_client
 
 router = APIRouter(prefix="/api/ledger", tags=["ledger & audit"])
 
 
 @router.get("")
-async def get_ledger_overview(db: Any = Depends(get_supabase_client)) -> Dict[str, Any]:
+async def get_ledger_overview(
+    _organizer: AuthenticatedUser = Depends(require_organizer_or_admin),
+    db: Any = Depends(get_supabase_client),
+) -> Dict[str, Any]:
     """Return double-entry journals, entries, refund payouts, outbox jobs, and audit trail."""
     accounts = db.table("ledger_accounts").select("*").execute().data or []
     journals = db.table("ledger_journals").select("*").execute().data or []

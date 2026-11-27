@@ -1,38 +1,37 @@
-"""Pydantic schemas for social resale campaigns, listings, reservations, and checkout."""
+"""Strict Pydantic schemas for social resale campaigns, listings, reservations, and checkout."""
 
-from typing import List, Optional
-from pydantic import BaseModel, Field
+from typing import List
+from pydantic import BaseModel, Field, conint, constr
 
 
 class CampaignListingItemInput(BaseModel):
-    ticket_id: str
-    asking_price_zar: int = Field(..., gt=0)
+    ticket_id: constr(min_length=2, max_length=64, strip_whitespace=True)
+    asking_price_zar: conint(gt=0)
 
 
 class CampaignCreateRequest(BaseModel):
-    seller_wallet: str = Field(..., min_length=4)
-    title: str = Field(..., min_length=3, max_length=160)
-    items: List[CampaignListingItemInput] = Field(..., min_length=1)
+    seller_wallet: constr(min_length=4, max_length=64, strip_whitespace=True)
+    title: constr(min_length=3, max_length=160, strip_whitespace=True)
+    items: List[CampaignListingItemInput] = Field(..., min_length=1, max_length=20)
 
 
 class ListingCancelRequest(BaseModel):
-    seller_wallet: str = Field(..., min_length=4)
+    seller_wallet: constr(min_length=4, max_length=64, strip_whitespace=True)
 
 
 class ListingReserveRequest(BaseModel):
-    buyer_wallet: str = Field(..., min_length=4)
-    ttl_seconds: int = Field(default=600, ge=60, le=3600)
+    buyer_wallet: constr(min_length=4, max_length=64, strip_whitespace=True)
+    ttl_seconds: conint(ge=60, le=3600) = 600
 
 
 class CheckoutInitiateRequest(BaseModel):
-    listing_id: str
-    buyer_wallet: str = Field(..., min_length=4)
-    payment_method: str = Field(
-        ...,
-        pattern="^(eventpass_wallet|card|eft|payfast|payflex|x402)$",
+    listing_id: constr(min_length=2, max_length=64, strip_whitespace=True)
+    buyer_wallet: constr(min_length=4, max_length=64, strip_whitespace=True)
+    payment_method: constr(
+        pattern="^(eventpass_wallet|card|eft|payfast|payflex|x402)$"
     )
 
 
 class CheckoutConfirmDemoRequest(BaseModel):
-    payment_reference: str
-    simulate_outcome: str = Field(default="success", pattern="^(success|failed)$")
+    payment_reference: constr(min_length=4, max_length=128, strip_whitespace=True)
+    simulate_outcome: constr(pattern="^(success|failed)$") = "success"

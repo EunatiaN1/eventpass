@@ -7,6 +7,7 @@ import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
+from backend.auth import AuthenticatedUser, get_current_user
 from backend.config import Settings, get_settings
 from backend.database import get_supabase_client
 from backend.schemas.common import ListingStatus, TicketStatus
@@ -41,12 +42,16 @@ def _add_business_days(start: datetime, days: int) -> datetime:
 async def list_tickets(
     owner_wallet: Optional[str] = Query(default=None),
     event_id: Optional[str] = Query(default=None),
+    current_user: AuthenticatedUser = Depends(get_current_user),
     db: Any = Depends(get_supabase_client),
 ) -> List[Dict[str, Any]]:
     """Return tickets individually with event, listing, reservation, and refund eligibility details."""
+    effective_owner = owner_wallet
+    if current_user.role not in ("organizer", "admin"):
+        effective_owner = current_user.wallet
     query = db.table("tickets").select("*")
-    if owner_wallet:
-        query = query.eq("owner_wallet", owner_wallet)
+    if effective_owner:
+        query = query.eq("owner_wallet", effective_owner)
     if event_id:
         query = query.eq("event_id", event_id)
     tickets = query.execute().data or []
@@ -94,6 +99,7 @@ async def list_tickets(
 @router.get("/{ticket_id}/credential", response_model=TicketCredentialResponse)
 async def get_ticket_credential(
     ticket_id: str,
+    current_user: AuthenticatedUser = Depends(get_current_user),
     db: Any = Depends(get_supabase_client),
     settings: Settings = Depends(get_settings),
 ) -> TicketCredentialResponse:
@@ -103,6 +109,14 @@ async def get_ticket_credential(
         raise HTTPException(status_code=404, detail="Ticket not found.")
 
     ticket = resp.data[0]
+    if (
+        ticket.get("owner_wallet") != current_user.wallet
+        and current_user.role not in ("organizer", "admin")
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the ticket owner can access this admission credential.",
+        )
     if ticket.get("status") == TicketStatus.REFUNDED.value:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -125,9 +139,18 @@ async def get_ticket_credential(
 async def request_unsold_ticket_refund(
     ticket_id: str,
     payload: RefundRequestCreate,
+    current_user: AuthenticatedUser = Depends(get_current_user),
     db: Any = Depends(get_supabase_client),
 ) -> RefundResponse:
     """Execute a 75% unsold-ticket refund atomically (mutually exclusive with resale/sale)."""
+    if (
+        payload.requester_wallet != current_user.wallet
+        and current_user.role not in ("organizer", "admin")
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail="requester_wallet must match authenticated user.",
+        )
     lock_ctx = db.lock if hasattr(db, "lock") else nullcontext()
     with lock_ctx:
         t_resp = db.table("tickets").select("*").eq("id", ticket_id).execute()

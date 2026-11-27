@@ -120,6 +120,8 @@ class DevSupabaseClient:
     def __init__(self, seed: bool = True) -> None:
         self._lock = threading.RLock()
         self.tables: Dict[str, List[Dict[str, Any]]] = {
+            "profiles": [],
+            "otp_challenges": [],
             "events": [],
             "tickets": [],
             "resale_campaigns": [],
@@ -220,6 +222,33 @@ class DevSupabaseClient:
 
         seller_wallet = "SellerWalletDemo11111111111111111111111111"
         buyer_wallet = "BuyerWalletDemo222222222222222222222222222"
+        organizer_wallet = "OrgWalletCapeTown111111111111111111111111"
+
+        self.tables["profiles"].extend(
+            [
+                {
+                    "id": "usr-buyer-demo",
+                    "wallet_address": buyer_wallet,
+                    "email": "buyer@eventpass.co.za",
+                    "role": "buyer",
+                    "created_at": now.isoformat(),
+                },
+                {
+                    "id": "usr-seller-demo",
+                    "wallet_address": seller_wallet,
+                    "email": "seller@eventpass.co.za",
+                    "role": "buyer",
+                    "created_at": now.isoformat(),
+                },
+                {
+                    "id": "usr-org-ct",
+                    "wallet_address": organizer_wallet,
+                    "email": "organizer@eventpass.co.za",
+                    "role": "organizer",
+                    "created_at": now.isoformat(),
+                },
+            ]
+        )
 
         # Seed seller with 4 individual tickets from one multi-ticket order (#1-#4),
         # 3 of which (#1, #2, #3) are listed in a single social resale campaign,

@@ -1,26 +1,54 @@
-"""Environment configuration loader for EventPass backend."""
+"""Environment configuration loader using pydantic-settings for EventPass."""
 
 from functools import lru_cache
-import os
-from dotenv import load_dotenv
-from pydantic import BaseModel
-
-load_dotenv()
+from typing import List
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 PLACEHOLDER_URLS = {"", "https://your-project-ref.supabase.co"}
 PLACEHOLDER_KEYS = {"", "your-supabase-service-role-key"}
 
 
-class Settings(BaseModel):
-    """Application settings loaded from environment variables."""
+class Settings(BaseSettings):
+    """Application settings loaded securely from environment variables / .env."""
 
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+    environment: str = "development"
+    debug: bool = False
+    reload: bool = False
+
+    # Supabase (service role key stays strictly on backend)
     supabase_url: str = ""
     supabase_key: str = ""
+
+    # JWT & Auth
+    jwt_secret: str = "devnet-jwt-secret-change-in-production-min-32-chars"
+    jwt_algorithm: str = "HS256"
+    jwt_expire_minutes: int = 60 * 24
+
+    # Strict CORS allowlist (never ["*"])
+    allowed_origins: List[str] = [
+        "http://localhost:8081",
+        "http://127.0.0.1:8000",
+        "http://localhost:8000",
+        "https://eventpass.co.za",
+    ]
+
+    # Fiat payment secrets
     payfast_secret: str = ""
     paystack_secret: str = ""
+
+    # x402 / Solana Devnet
     x402_pay_to_address: str = "DevnetTreasuryWallet11111111111111111111111"
     x402_facilitator_url: str = "https://x402.org/facilitator"
     zar_to_usdc_rate: str = "0.055"
+    solana_private_key: str = ""
+
+    # QR signing
     qr_signing_secret: str = "devnet-qr-credential-signing-key-change-in-prod"
     qr_key_id: str = "ep-devnet-k1"
 
@@ -35,21 +63,5 @@ class Settings(BaseModel):
 
 @lru_cache
 def get_settings() -> Settings:
-    """Return cached Settings instance populated from the environment."""
-    return Settings(
-        supabase_url=os.getenv("SUPABASE_URL", ""),
-        supabase_key=os.getenv("SUPABASE_KEY", ""),
-        payfast_secret=os.getenv("PAYFAST_SECRET", ""),
-        paystack_secret=os.getenv("PAYSTACK_SECRET", ""),
-        x402_pay_to_address=os.getenv(
-            "X402_PAY_TO_ADDRESS", "DevnetTreasuryWallet11111111111111111111111"
-        ),
-        x402_facilitator_url=os.getenv(
-            "X402_FACILITATOR_URL", "https://x402.org/facilitator"
-        ),
-        zar_to_usdc_rate=os.getenv("ZAR_TO_USDC_RATE", "0.055"),
-        qr_signing_secret=os.getenv(
-            "QR_SIGNING_SECRET", "devnet-qr-credential-signing-key-change-in-prod"
-        ),
-        qr_key_id=os.getenv("QR_KEY_ID", "ep-devnet-k1"),
-    )
+    """Return cached Settings instance populated from .env / environment."""
+    return Settings()

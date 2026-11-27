@@ -7,6 +7,7 @@ import uuid
 
 from fastapi import APIRouter, Depends
 
+from backend.auth import AuthenticatedUser, get_current_user
 from backend.config import Settings, get_settings
 from backend.database import get_supabase_client
 from backend.schemas.checkin import CheckInRequest, CheckInResponse
@@ -20,6 +21,7 @@ router = APIRouter(tags=["check-in"])
 @router.post("/api/check-in", response_model=CheckInResponse)
 async def validate_and_check_in(
     payload: CheckInRequest,
+    _user: AuthenticatedUser = Depends(get_current_user),
     db: Any = Depends(get_supabase_client),
     settings: Settings = Depends(get_settings),
 ) -> CheckInResponse:
@@ -136,7 +138,9 @@ async def validate_and_check_in(
 
 @router.get("/api/check-ins/{event_id}")
 async def list_event_check_ins(
-    event_id: str, db: Any = Depends(get_supabase_client)
+    event_id: str,
+    _user: AuthenticatedUser = Depends(get_current_user),
+    db: Any = Depends(get_supabase_client),
 ) -> List[Dict[str, Any]]:
     """List check-in log records for a given event."""
     return (

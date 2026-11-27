@@ -1,13 +1,13 @@
-"""Pydantic schemas for gate staff QR validation and single-use check-in."""
+"""Strict Pydantic schemas for gate staff QR validation and single-use check-in."""
 
 from typing import Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, constr
 
 
 class CheckInRequest(BaseModel):
-    qr_token: str = Field(..., min_length=10)
-    event_id: str
-    scanner_id: str = Field(default="GateScanner-A1")
+    qr_token: constr(min_length=10, max_length=1024, strip_whitespace=True)
+    event_id: constr(min_length=2, max_length=64, strip_whitespace=True)
+    scanner_id: constr(min_length=2, max_length=64, strip_whitespace=True) = "GateScanner-A1"
 
 
 class CheckInResponse(BaseModel):

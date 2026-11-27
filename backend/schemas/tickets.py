@@ -1,11 +1,10 @@
-"""Pydantic schemas for individual tickets, QR credentials, and 75% refunds."""
+"""Strict Pydantic schemas for individual tickets, QR credentials, and 75% refunds."""
 
-from typing import Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, constr
 
 
 class RefundRequestCreate(BaseModel):
-    requester_wallet: str = Field(..., min_length=4)
+    requester_wallet: constr(min_length=4, max_length=64, strip_whitespace=True)
 
 
 class RefundResponse(BaseModel):
