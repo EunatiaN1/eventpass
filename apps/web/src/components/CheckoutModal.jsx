@@ -1,7 +1,7 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { CreditCard, LoaderCircle, X, Zap } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Button } from "./Button";
 import { QrCodeMatrix } from "./QrCodeMatrix";
 
@@ -20,24 +20,8 @@ export function CheckoutModal({ event, quantity, order, api, onConfirm, onCancel
   const [busy, setBusy] = useState(false);
   const [receipt, setReceipt] = useState(null);
   const [error, setError] = useState("");
-  const [usdcAmount, setUsdcAmount] = useState("0.00");
   const reference = order?.order_reference || "demo";
   const ticket = order?.tickets?.[0];
-
-  useEffect(() => {
-    if (!order || method !== "x402") return;
-    let cancelled = false;
-    api(`/api/checkout/config?amount_zar=${encodeURIComponent(order.total_zar)}`)
-      .then((config) => {
-        if (!cancelled) {
-          setUsdcAmount(config.amount_usdc || "0.00");
-        }
-      })
-      .catch((err) => !cancelled && setError(err.message));
-    return () => {
-      cancelled = true;
-    };
-  }, [api, method, order]);
 
   const simulatePayment = async () => {
     if (!ticket) return;
@@ -211,7 +195,7 @@ export function CheckoutModal({ event, quantity, order, api, onConfirm, onCancel
                   <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/[.045] p-4">
                     <div>
                       <p className="text-[10px] uppercase tracking-widest text-white/45">Demo amount only</p>
-                      <p className="mt-1 text-xl font-semibold text-white">${usdcAmount} <span className="text-xs text-white/45">USDC</span></p>
+                      <p className="mt-1 text-xl font-semibold text-white">{formatZar(order?.total_zar)} <span className="text-xs text-white/45">DEMO</span></p>
                       <p className="mt-1 text-xs text-white/50">No network payment</p>
                     </div>
                     <div className="rounded-xl bg-white p-2"><QRCodeSVG value={demoReference} size={112} level="M" /></div>
