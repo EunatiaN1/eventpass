@@ -8,9 +8,9 @@ import {
   Share2,
   Sliders,
   Ticket,
+  Mail,
 } from "lucide-react";
 import { Button } from "./Button";
-import { PhantomGhostIcon } from "./AuthModal";
 
 const NAV_ITEMS = [
   { id: "events", label: "Events & Buy", icon: Calendar },
@@ -80,10 +80,12 @@ export function Navbar({ activeTab, onSelectTab, auth, onOpenAuth, onSignOut }) 
               <motion.div
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
-                className="flex items-center gap-2 px-3.5 py-2 rounded-2xl bg-[#00E676]/10 border border-[#00E676]/30 text-xs font-medium text-white"
+                className="flex max-w-[220px] items-center gap-2 rounded-2xl border border-white/10 bg-white/[.05] px-2.5 py-1.5 text-xs font-medium text-white"
               >
-                <span className="h-2 w-2 rounded-full bg-[#00E676]" />
-                <span className="max-w-[130px] truncate">{auth.label}</span>
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#FF6B00] to-[#FF9100] text-[11px] font-bold text-white shadow-[0_4px_14px_-5px_rgba(255,107,0,.8)]">
+                  {(auth.email || auth.wallet || "E").slice(0, 1).toUpperCase()}
+                </span>
+                <span className="max-w-[150px] truncate">{auth.email || `${auth.wallet?.slice(0, 6)}…`}</span>
               </motion.div>
               <Button variant="glass" size="sm" onClick={onSignOut} title="Sign Out">
                 <LogOut className="w-3.5 h-3.5" />
@@ -91,8 +93,8 @@ export function Navbar({ activeTab, onSelectTab, auth, onOpenAuth, onSignOut }) 
             </div>
           ) : (
             <Button variant="glass" size="md" onClick={() => onOpenAuth()}>
-              <PhantomGhostIcon className="w-4 h-4 text-[#AB9FF2]" />
-              <span>Connect / Sign In</span>
+              <Mail className="w-4 h-4 text-[#FF8A35]" />
+              <span>Sign In</span>
             </Button>
           )}
         </div>

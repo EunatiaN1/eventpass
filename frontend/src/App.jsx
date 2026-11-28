@@ -1,15 +1,17 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { Lock, Share2, Sparkles, Ticket, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import { AuthModal, PhantomGhostIcon } from "./components/AuthModal";
+import { AuthModal } from "./components/AuthModal";
 import { Button } from "./components/Button";
 import { CampaignView } from "./components/CampaignView";
+import { CheckoutModal } from "./components/CheckoutModal";
 import { CheckInScannerView } from "./components/CheckInScannerView";
 import { EventCard } from "./components/EventCard";
 import { Layout } from "./components/Layout";
 import { OrganizerLedgerView } from "./components/OrganizerLedgerView";
 import { QrCodeMatrix } from "./components/QrCodeMatrix";
 import { TicketPassCard } from "./components/TicketPassCard";
+import { useAuth } from "./contexts/AuthContext";
 
 export default function App() {
   const [activeTab, setActiveTab] = useState(() => {
@@ -21,12 +23,7 @@ export default function App() {
     return match ? match[1] : null;
   });
 
-  const [auth, setAuth] = useState({
-    isAuthenticated: false,
-    method: null,
-    wallet: null,
-    label: null,
-  });
+  const { auth, requestCode, verifyCode, signOut } = useAuth();
   const [authModal, setAuthModal] = useState({
     isOpen: false,
     contextMessage: "",
@@ -46,6 +43,8 @@ export default function App() {
   const [campaignPrice, setCampaignPrice] = useState(550);
   const [scannerPrefill, setScannerPrefill] = useState(null);
   const [toast, setToast] = useState(null);
+  const [checkout, setCheckout] = useState(null);
+  const [checkoutComplete, setCheckoutComplete] = useState(false);
 
   const notify = useCallback((message, isError = false) => {
     setToast({ message, isError });
@@ -55,8 +54,12 @@ export default function App() {
 
   const api = useCallback(async (path, options = {}) => {
     const res = await fetch(path, {
-      headers: { "Content-Type": "application/json", ...(options.headers || {}) },
       ...options,
+      credentials: "same-origin",
+      headers: {
+        "Content-Type": "application/json",
+        ...(options.headers || {}),
+      },
     });
     const text = await res.text();
     let data = null;
@@ -116,22 +119,24 @@ export default function App() {
     openAuthModal(contextMessage, action);
   };
 
-  const handleAuthenticate = (identity) => {
-    const nextAuth = { isAuthenticated: true, ...identity };
+  const handleVerifyOtp = async (email, code) => {
+    const nextAuth = await verifyCode(email, code);
     const pending = authModal.pendingAction;
-    setAuth(nextAuth);
     setAuthModal({ isOpen: false, contextMessage: "", pendingAction: null });
-    notify(`Signed in as ${identity.label}`);
-    if (pending) {
-      pending(nextAuth);
-    }
+    notify(`Signed in as ${nextAuth.email}`);
+    if (pending) await pending(nextAuth);
+    return nextAuth;
   };
 
-  const handleSignOut = () => {
-    setAuth({ isAuthenticated: false, method: null, wallet: null, label: null });
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+    } catch (err) {
+      notify(err.message || "Unable to sign out.", true);
+    }
     setTickets([]);
     setSelectedForResale(new Set());
-    notify("Signed out.");
+    notify("Signed out securely.");
   };
 
   const selectTab = (tab, slug = null) => {
@@ -152,21 +157,42 @@ export default function App() {
       `Sign in to finalize your purchase of ${quantity} ticket(s) for ${event.title}.`,
       async (currentAuth) => {
         try {
-          const res = await api(`/api/events/${event.id}/purchase-primary`, {
+          const order = await api(`/api/events/${event.id}/purchase-primary`, {
             method: "POST",
             body: JSON.stringify({
               buyer_wallet: currentAuth.wallet,
               quantity,
               tier: "General Admission",
+              payment_method: "eft",
             }),
           });
-          notify(`Minted ${res.quantity} individual ticket pass(es) (Order ${res.order_reference}).`);
-          selectTab("tickets");
+          setCheckoutComplete(false);
+          setCheckout({ event, quantity, order });
         } catch (err) {
           notify(err.message, true);
         }
       }
     );
+  };
+
+  const handleConfirmMockPayment = async (ticketId, paymentMethod, delayMs) => {
+    if (delayMs) await new Promise((resolve) => setTimeout(resolve, delayMs));
+    await api(`/api/checkout/${encodeURIComponent(checkout.order.order_reference)}/method?payment_method=${paymentMethod}`, {
+      method: "PATCH",
+    });
+    const result = await api("/api/webhooks/mock-success", {
+      method: "POST",
+      body: JSON.stringify({ ticket_id: ticketId, payment_method: paymentMethod }),
+    });
+    setCheckoutComplete(true);
+    return result;
+  };
+
+  const closeCheckout = () => {
+    const completed = checkoutComplete;
+    setCheckout(null);
+    setCheckoutComplete(false);
+    if (completed) selectTab("tickets");
   };
 
   const handleViewQr = async (ticketId) => {
@@ -340,20 +366,16 @@ export default function App() {
                   Your Digital Passes Are Protected
                 </h2>
                 <p className="text-sm text-white/70 mt-2">
-                  Connect your Phantom wallet or sign in with email to view your Metaplex Core
-                  passes, QR entry credentials, and social resale tools.
+                  Sign in with your email to view your EventPass tickets, QR entry credentials, and social resale tools.
                 </p>
               </div>
               <Button
                 variant="primary"
                 size="lg"
                 fullWidth
-                onClick={() =>
-                  openAuthModal("Sign in to unlock My Tickets and digital entry passes.")
-                }
+                onClick={() => openAuthModal("Sign in to unlock My Tickets and digital entry passes.")}
               >
-                <PhantomGhostIcon className="w-4 h-4" />
-                Connect / Sign In
+                Sign In with Email
               </Button>
             </motion.div>
           ) : (
@@ -362,10 +384,10 @@ export default function App() {
                 <div>
                   <h1 className="text-3xl font-bold tracking-tight text-white">My Digital Passes</h1>
                   <p className="text-sm text-white/70 mt-2">
-                    Wallet: <code className="text-[#00E676]">{auth.wallet}</code>
+                    Signed in as <code className="text-[#00E676]">{auth.email}</code>
                   </p>
                 </div>
-                {tickets.some((t) => t.status === "issued" && t.resale_enabled) && (
+                {tickets.some((t) => ["issued", "sold"].includes(t.status) && t.resale_enabled) && (
                   <Button variant="primary" size="lg" onClick={handleOpenCreateCampaign}>
                     <Share2 className="w-4 h-4" />
                     List for Resale ({selectedForResale.size} selected)
@@ -377,8 +399,7 @@ export default function App() {
                 <div className="backdrop-blur-md bg-white/5 border border-white/10 shadow-2xl rounded-3xl p-8 text-center space-y-4">
                   <Ticket className="w-8 h-8 text-white/40 mx-auto" />
                   <p className="text-sm text-white/70">
-                    No passes held by this account yet. Grab tickets from Events & Buy or switch
-                    to the seeded Seller Demo wallet to test resale & 75% refunds.
+                    No passes held by this account yet. Grab tickets from Events & Buy to add a pass to your account.
                   </p>
                   <Button variant="primary" onClick={() => selectTab("events")}>
                     Browse Events
@@ -433,8 +454,20 @@ export default function App() {
         isOpen={authModal.isOpen}
         contextMessage={authModal.contextMessage}
         onClose={() => setAuthModal({ isOpen: false, contextMessage: "", pendingAction: null })}
-        onAuthenticate={handleAuthenticate}
+        onRequestOtp={requestCode}
+        onVerifyOtp={handleVerifyOtp}
       />
+
+      {checkout && (
+        <CheckoutModal
+          event={checkout.event}
+          quantity={checkout.quantity}
+          order={checkout.order}
+          api={api}
+          onConfirm={handleConfirmMockPayment}
+          onClose={closeCheckout}
+        />
+      )}
 
       {/* Full QR Pass Modal */}
       <AnimatePresence>

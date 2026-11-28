@@ -30,4 +30,4 @@ class PrimaryPurchaseRequest(BaseModel):
     buyer_wallet: constr(min_length=4, max_length=64, strip_whitespace=True)
     quantity: conint(ge=1, le=20)
     tier: constr(min_length=2, max_length=64, strip_whitespace=True) = "General Admission"
-    payment_method: constr(pattern="^(card|payfast|eft|eventpass_wallet)$") = "card"
+    payment_method: constr(pattern="^(card|eft|x402)$") = "card"

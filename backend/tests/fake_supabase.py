@@ -1,6 +1,7 @@
 """In-memory fake Supabase client for isolated FastAPI unit tests."""
 
 from dataclasses import dataclass
+import threading
 from typing import Any, Dict, List, Optional
 
 
@@ -63,6 +64,7 @@ class FakeSupabaseClient:
     """In-memory table store mimicking supabase.Client."""
 
     def __init__(self, tables: Optional[Dict[str, List[Dict[str, Any]]]] = None) -> None:
+        self.lock = threading.RLock()
         self.tables: Dict[str, List[Dict[str, Any]]] = tables or {
             "events": [],
             "tickets": [],
@@ -75,3 +77,40 @@ class FakeSupabaseClient:
         if name not in self.tables:
             self.tables[name] = []
         return FakeQueryBuilder(self.tables[name])
+
+    def settle_mock_payment(self, ticket_id: str, payment_method: str) -> Dict[str, Any]:
+        """Test-only atomic equivalent of the PostgreSQL settlement function."""
+        with self.lock:
+            ticket = next((row for row in self.tables.get("tickets", []) if row.get("id") == ticket_id), None)
+            if not ticket:
+                raise ValueError("Ticket not found.")
+            order_reference = ticket.get("order_reference")
+            transaction = next(
+                (row for row in self.tables.get("transactions", []) if row.get("payment_reference") == order_reference),
+                None,
+            )
+            if not transaction:
+                raise ValueError("Checkout transaction not found.")
+            if transaction.get("payment_method") != payment_method:
+                raise ValueError("Payment method does not match this checkout.")
+            order_tickets = [row for row in self.tables["tickets"] if row.get("order_reference") == order_reference]
+            if transaction.get("status") == "settled":
+                if any(row.get("status") != "sold" for row in order_tickets):
+                    raise ValueError("Already settled checkout has inconsistent tickets.")
+                idempotent = True
+            elif transaction.get("status") == "pending":
+                if any(row.get("status") != "reserved" for row in order_tickets):
+                    raise ValueError("Checkout contains a ticket that is not reserved.")
+                transaction["status"] = "settled"
+                for row in order_tickets:
+                    row["status"] = "sold"
+                idempotent = False
+            else:
+                raise ValueError("Checkout is not pending.")
+            return {
+                "status": "already_settled" if idempotent else "settled",
+                "payment_reference": order_reference,
+                "ticket_ids": [row["id"] for row in order_tickets],
+                "amount_zar": int(transaction.get("amount", 0)),
+                "idempotent": idempotent,
+            }

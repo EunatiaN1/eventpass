@@ -13,13 +13,7 @@ class OtpVerifyRequest(BaseModel):
     otp_code: constr(min_length=6, max_length=6, pattern="^[0-9]{6}$")
 
 
-class WalletAuthRequest(BaseModel):
-    wallet: constr(min_length=16, max_length=64, strip_whitespace=True)
-
-
-class AuthTokenResponse(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
+class AuthSessionResponse(BaseModel):
     user_id: str
     wallet: str
     role: str

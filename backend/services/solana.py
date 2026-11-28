@@ -15,7 +15,6 @@ Architecture decision:
 from __future__ import annotations
 
 import asyncio
-import base58
 import logging
 import struct
 from datetime import datetime, timezone
@@ -34,6 +33,7 @@ TRANSFER_DISCRIMINATOR = bytes([163, 52, 200, 231, 140, 3, 69, 186])
 
 def _load_keypair(b58_private_key: str):
     """Decode a base-58 64-byte secret key into a solders Keypair."""
+    import base58
     from solders.keypair import Keypair  # type: ignore
 
     raw = base58.b58decode(b58_private_key)

@@ -42,6 +42,10 @@ class Settings(BaseSettings):
     payfast_secret: str = ""
     paystack_secret: str = ""
 
+    # Passwordless email OTP delivery (Resend)
+    resend_api_key: str = ""
+    auth_from_email: str = "EventPass <login@eventpass.co.za>"
+
     # x402 / Solana Devnet
     x402_pay_to_address: str = "DevnetTreasuryWallet11111111111111111111111"
     x402_facilitator_url: str = "https://x402.org/facilitator"

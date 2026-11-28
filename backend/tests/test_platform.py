@@ -82,6 +82,16 @@ def test_multi_ticket_primary_purchase_and_campaign_price_cap(client):
     assert len({t["id"] for t in tickets}) == 3
     assert len({t["asset_address"] for t in tickets}) == 3
 
+    # Confirm the test checkout through the idempotent simulation endpoint.
+    settled = tc.post(
+        "/api/webhooks/mock-success",
+        json={"ticket_id": tickets[0]["id"], "payment_method": "card"},
+        headers=_auth(buyer, role="buyer", user_id="usr-NewBuyer"),
+    )
+    assert settled.status_code == 200
+    assert settled.json()["status"] == "settled"
+    assert len(settled.json()["ticket_ids"]) == 3
+
     # Attempting to list above organizer cap (R600) is rejected with 422
     bad_cmp = tc.post(
         "/api/campaigns",

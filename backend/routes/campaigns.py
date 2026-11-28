@@ -119,7 +119,7 @@ async def create_resale_campaign(
                 raise HTTPException(
                     status_code=403, detail=f"Seller does not own ticket {item.ticket_id}."
                 )
-            if ticket.get("status") != TicketStatus.ISSUED.value:
+            if ticket.get("status") not in (TicketStatus.ISSUED.value, TicketStatus.SOLD.value):
                 raise HTTPException(
                     status_code=409,
                     detail=f"Ticket {item.ticket_id} is not eligible (status={ticket.get('status')}).",

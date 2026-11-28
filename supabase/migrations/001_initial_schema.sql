@@ -3,6 +3,37 @@
 
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
+-- 0. Application profiles used by the FastAPI auth and role checks
+CREATE TABLE IF NOT EXISTS profiles (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    wallet_address TEXT NOT NULL UNIQUE,
+    email TEXT,
+    role TEXT NOT NULL DEFAULT 'buyer'
+        CHECK (role IN ('buyer', 'organizer', 'admin')),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_profiles_email_lower
+    ON profiles (lower(email)) WHERE email IS NOT NULL;
+
+-- Short-lived, single-use passwordless login challenges. Only the server role may access these.
+CREATE TABLE IF NOT EXISTS otp_challenges (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    email TEXT NOT NULL,
+    code_hash TEXT NOT NULL,
+    expires_at TIMESTAMPTZ NOT NULL,
+    consumed BOOLEAN NOT NULL DEFAULT FALSE,
+    attempts INTEGER NOT NULL DEFAULT 0 CHECK (attempts BETWEEN 0 AND 5),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_otp_challenges_email_created
+    ON otp_challenges (email, created_at DESC);
+
+ALTER TABLE otp_challenges ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON otp_challenges FROM PUBLIC, anon, authenticated;
+GRANT ALL ON otp_challenges TO service_role;
+
 -- 1. Events
 CREATE TABLE IF NOT EXISTS events (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

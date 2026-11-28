@@ -3,7 +3,7 @@
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Cookie, Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 import jwt
 from pydantic import BaseModel
@@ -45,11 +45,17 @@ def create_access_token(
 
 def get_current_user(
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
+    session_cookie: Optional[str] = Cookie(default=None, alias="eventpass_session"),
     settings: Settings = Depends(get_settings),
     db: Any = Depends(get_supabase_client),
 ) -> AuthenticatedUser:
     """Validate Bearer JWT and resolve authoritative user role from the database."""
-    if not credentials or credentials.scheme.lower() != "bearer":
+    token = (
+        credentials.credentials
+        if credentials and credentials.scheme.lower() == "bearer"
+        else session_cookie
+    )
+    if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Authentication required. Provide a valid Bearer token.",
@@ -58,7 +64,7 @@ def get_current_user(
 
     try:
         claims = jwt.decode(
-            credentials.credentials,
+            token,
             settings.jwt_secret,
             algorithms=[settings.jwt_algorithm],
         )

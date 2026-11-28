@@ -144,7 +144,7 @@ async def purchase_primary_tickets(
     db: Any = Depends(get_supabase_client),
     settings: Settings = Depends(get_settings),
 ) -> Dict[str, Any]:
-    """Primary checkout: creates N individually identifiable Metaplex Core ticket records."""
+    """Create a pending simulated checkout and its individually identifiable tickets."""
     if payload.buyer_wallet != current_user.wallet and current_user.role not in ("organizer", "admin"):
         raise HTTPException(
             status_code=403, detail="buyer_wallet must match authenticated user."
@@ -171,7 +171,7 @@ async def purchase_primary_tickets(
             "original_buyer_wallet": payload.buyer_wallet,
             "order_reference": order_ref,
             "tier": payload.tier,
-            "status": TicketStatus.ISSUED.value,
+            "status": TicketStatus.RESERVED.value,
             "original_price_zar": unit_price,
             "credential_version": 1,
             "checked_in_at": None,
@@ -193,11 +193,15 @@ async def purchase_primary_tickets(
         {
             "id": str(uuid.uuid4()),
             "payment_reference": order_ref,
-            "provider": "paystack" if payload.payment_method == "card" else "payfast",
+            "provider": {
+                "card": "paystack",
+                "eft": "payfast",
+                "x402": "x402",
+            }[payload.payment_method],
             "payment_method": payload.payment_method,
             "amount": total_zar,
             "currency": "ZAR",
-            "status": "settled",
+            "status": "pending",
             "ticket_id": created_tickets[0]["id"],
             "buyer_wallet": payload.buyer_wallet,
             "created_at": now,

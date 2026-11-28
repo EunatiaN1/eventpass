@@ -96,7 +96,7 @@ export function TicketPassCard({
 
           <div className="space-y-2 text-xs text-white/70 flex-1">
             <div className="font-mono text-white/90 text-[11px]">ID: {ticket.id}</div>
-            {ticket.status === "issued" && ticket.resale_enabled && (
+            {["issued", "sold"].includes(ticket.status) && ticket.resale_enabled && (
               <label className="flex items-center gap-2 cursor-pointer select-none rounded-xl bg-white/5 border border-white/10 px-3 py-2 hover:bg-white/10 transition-colors">
                 <input
                   type="checkbox"

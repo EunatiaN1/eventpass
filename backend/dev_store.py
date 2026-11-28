@@ -151,6 +151,47 @@ class DevSupabaseClient:
                 self.tables[name] = []
             return DevQueryBuilder(self.tables[name], self._lock)
 
+    def settle_mock_payment(self, ticket_id: str, payment_method: str) -> Dict[str, Any]:
+        """Atomically settle a simulated payment and every ticket in its order."""
+        with self._lock:
+            ticket = next((row for row in self.tables["tickets"] if row.get("id") == ticket_id), None)
+            if not ticket:
+                raise ValueError("Ticket not found.")
+            order_reference = ticket.get("order_reference")
+            transaction = next(
+                (row for row in self.tables["transactions"] if row.get("payment_reference") == order_reference),
+                None,
+            )
+            if not transaction:
+                raise ValueError("Checkout transaction not found.")
+            if transaction.get("payment_method") != payment_method:
+                raise ValueError("Payment method does not match this checkout.")
+
+            order_tickets = [
+                row for row in self.tables["tickets"] if row.get("order_reference") == order_reference
+            ]
+            if transaction.get("status") == "settled":
+                if any(row.get("status") != "sold" for row in order_tickets):
+                    raise ValueError("Already settled checkout has inconsistent tickets.")
+                idempotent = True
+            elif transaction.get("status") == "pending":
+                if any(row.get("status") != "reserved" for row in order_tickets):
+                    raise ValueError("Checkout contains a ticket that is not reserved.")
+                transaction["status"] = "settled"
+                for row in order_tickets:
+                    row["status"] = "sold"
+                idempotent = False
+            else:
+                raise ValueError("Checkout is not pending.")
+
+            return {
+                "status": "already_settled" if idempotent else "settled",
+                "payment_reference": order_reference,
+                "ticket_ids": [row["id"] for row in order_tickets],
+                "amount_zar": int(transaction.get("amount", 0)),
+                "idempotent": idempotent,
+            }
+
     def _seed_initial_data(self) -> None:
         now = datetime.now(timezone.utc)
         event_1_date = now + timedelta(days=45)
