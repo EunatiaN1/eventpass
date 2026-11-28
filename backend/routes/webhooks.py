@@ -102,43 +102,6 @@ def _process_webhook_settlement(
     )
 
 
-@router.post("/payfast", response_model=WebhookResponse)
-async def payfast_webhook(
-    request: Request,
-    background_tasks: BackgroundTasks,
-    x_payfast_signature: Optional[str] = Header(default=None, alias="X-PayFast-Signature"),
-    settings: Settings = Depends(get_settings),
-    db: Client = Depends(get_supabase_client),
-) -> WebhookResponse:
-    """Handle PayFast payment notifications with HMAC-SHA256 verification."""
-    raw_body = await request.body()
-    if not _verify_hmac_signature(
-        raw_body, x_payfast_signature, settings.payfast_secret, hashlib.sha256
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid PayFast HMAC signature.",
-        )
-
-    try:
-        payload_dict = json.loads(raw_body.decode("utf-8"))
-        payload = PayFastWebhookPayload.model_validate(payload_dict)
-    except Exception as exc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Malformed PayFast webhook payload.",
-        ) from exc
-
-    is_success = payload.payment_status.upper() == "COMPLETE"
-    return _process_webhook_settlement(
-        db=db,
-        background_tasks=background_tasks,
-        payment_reference=payload.m_payment_id,
-        is_success=is_success,
-        buyer_wallet_override=payload.custom_str1,
-    )
-
-
 @router.post("/paystack", response_model=WebhookResponse)
 async def paystack_webhook(
     request: Request,
