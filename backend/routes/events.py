@@ -19,7 +19,7 @@ from backend.schemas.events import (
     EventResaleConfigUpdate,
     PrimaryPurchaseRequest,
 )
-from backend.services.credentials import issue_qr_credential
+from backend.services.solana import initialize_event, SolanaConfigurationError
 from backend.services.ledger import append_audit_log, append_ownership_history
 from backend.services.pricing import evaluate_refund_window
 
@@ -78,7 +78,7 @@ async def create_event(
 ) -> Dict[str, Any]:
     """Create a new event with organizer resale and 15-day refund window policy."""
     now = datetime.now(timezone.utc)
-    event_id = f"evt-{uuid.uuid4().hex[:8]}"
+    event_id = str(uuid.uuid4())
     row = {
         "id": event_id,
         "title": payload.title,
@@ -96,6 +96,15 @@ async def create_event(
         "refund_cutoff_days": 15,
         "created_at": now.isoformat(),
     }
+    from solders.pubkey import Pubkey
+    try:
+        Pubkey.from_string(payload.organizer_wallet)
+        await initialize_event(event_id, payload.organizer_wallet, get_settings())
+    except SolanaConfigurationError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail="Organizer must provide a valid Solana wallet address.") from exc
+
     resp = db.table("events").insert(row).execute()
     append_audit_log(
         db,
@@ -116,6 +125,11 @@ async def update_resale_config(
     db: Any = Depends(get_supabase_client),
 ) -> Dict[str, Any]:
     """Update organizer resale settings (toggle resale, price cap, markup, cutoff)."""
+    from solders.pubkey import Pubkey
+    try:
+        Pubkey.from_string(payload.buyer_wallet)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail="Buyer must connect a valid Solana wallet before checkout.") from exc
     ev_resp = db.table("events").select("*").eq("id", event_id).execute()
     if not ev_resp.data:
         raise HTTPException(status_code=404, detail="Event not found.")
@@ -144,7 +158,7 @@ async def purchase_primary_tickets(
     db: Any = Depends(get_supabase_client),
     settings: Settings = Depends(get_settings),
 ) -> Dict[str, Any]:
-    """Create a pending simulated checkout and its individually identifiable tickets."""
+    """Create a pending PayFast checkout; assets are minted after verified payment."""
     if payload.buyer_wallet != current_user.wallet and current_user.role not in ("organizer", "admin"):
         raise HTTPException(
             status_code=403, detail="buyer_wallet must match authenticated user."
@@ -161,12 +175,11 @@ async def purchase_primary_tickets(
 
     created_tickets: List[Dict[str, Any]] = []
     for idx in range(payload.quantity):
-        ticket_id = f"tkt-{uuid.uuid4().hex[:8]}"
-        asset_addr = f"CoreAsset{uuid.uuid4().hex[:12]}Devnet"
+        ticket_id = str(uuid.uuid4())
         ticket_row = {
             "id": ticket_id,
             "event_id": event_id,
-            "asset_address": asset_addr,
+            "asset_address": None,
             "owner_wallet": payload.buyer_wallet,
             "original_buyer_wallet": payload.buyer_wallet,
             "order_reference": order_ref,
@@ -178,27 +191,14 @@ async def purchase_primary_tickets(
             "created_at": now,
         }
         db.table("tickets").insert(ticket_row).execute()
-        append_ownership_history(
-            db,
-            ticket_id=ticket_id,
-            action="issued",
-            from_wallet=event.get("organizer_wallet"),
-            to_wallet=payload.buyer_wallet,
-            reference=order_ref,
-        )
-        qr_token = issue_qr_credential(ticket_row, settings)
         created_tickets.append({**ticket_row, "qr_token": qr_token, "unit_index": idx + 1})
 
     db.table("transactions").insert(
         {
             "id": str(uuid.uuid4()),
             "payment_reference": order_ref,
-            "provider": {
-                "card": "paystack",
-                "eft": "payfast",
-                "x402": "x402",
-            }[payload.payment_method],
-            "payment_method": payload.payment_method,
+            "provider": "payfast",
+            "payment_method": "payfast",
             "amount": total_zar,
             "currency": "ZAR",
             "status": "pending",
