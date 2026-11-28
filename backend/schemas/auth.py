@@ -14,6 +14,7 @@ class OtpVerifyRequest(BaseModel):
 
 
 class AuthSessionResponse(BaseModel):
+    access_token: Optional[str] = None
     user_id: str
     wallet: str
     role: str

@@ -112,7 +112,7 @@ async def request_otp(
     return response
 
 
-@router.post("/verify-otp", response_model=AuthSessionResponse)
+@router.post("/verify-otp", response_model=AuthSessionResponse, response_model_exclude_none=True)
 @limiter.limit("10/minute")
 async def verify_otp(
     request: Request,
@@ -187,6 +187,7 @@ async def verify_otp(
         path="/",
     )
     return AuthSessionResponse(
+        access_token=token if request.headers.get("x-auth-client") == "native" else None,
         user_id=profile["id"],
         wallet=profile["wallet_address"],
         role=profile["role"],
