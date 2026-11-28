@@ -73,10 +73,14 @@ async def create_checkout(
         raise HTTPException(status_code=403, detail="Payment does not belong to this account.")
     if tx.get("provider") != "payfast" or tx.get("status") != TransactionStatus.PENDING.value:
         raise HTTPException(status_code=409, detail="Payment is not a pending PayFast checkout.")
-    item_name = f"EventPass purchase {payment_reference}"
     if tx.get("listing_id"):
-        item_name = f"EventPass resale {payment_reference}"
-    fields = _base_fields(settings, payment_reference, int(tx["amount"]), item_name)
+        raise HTTPException(
+            status_code=409,
+            detail="PayFast resale checkout is disabled until the deployed program supports transfer delegation.",
+        )
+    fields = _base_fields(
+        settings, payment_reference, int(tx["amount"]), f"EventPass purchase {payment_reference}"
+    )
     action = (
         "https://sandbox.payfast.co.za/eng/process"
         if settings.payfast_sandbox
@@ -177,11 +181,9 @@ async def receive_itn(
         )
 
     if tx.get("listing_id"):
-        return _process_webhook_settlement(
-            db=db,
-            background_tasks=background_tasks,
-            payment_reference=payment_reference,
-            is_success=True,
+        raise HTTPException(
+            status_code=409,
+            detail="PayFast resale transfer delegation is not configured.",
         )
 
     tickets = (
