@@ -127,7 +127,7 @@ async def mint_ticket(
     core_program = Pubkey.from_string("CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d")
     system_program = Pubkey.from_string(SYSTEM_PROGRAM_ID)
 
-    async with AsyncClient(settings.solana_rpc_url, commitment="confirmed", timeout=30) as client:
+    async with AsyncClient(settings.solana_rpc_url, timeout=30) as client:
         existing = await client.get_account_info(record_pda)
         account = existing.value
         if account is not None:
