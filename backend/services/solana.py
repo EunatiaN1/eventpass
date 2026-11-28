@@ -189,6 +189,15 @@ async def check_in_ticket(
     account_info = await _asset_from_record(settings, record_pda)
     asset = Pubkey.from_string(account_info)
     data = _anchor_discriminator("check_in") + _string(event_id) + _string(ticket_id)
+    async with AsyncClient(settings.solana_rpc_url, timeout=30) as client:
+        existing = (await client.get_account_info(record_pda)).value
+    if existing is None or existing.owner != program_id:
+        raise RuntimeError("On-chain ticket record was not found.")
+    account_data = bytes(existing.data)
+    checked_index = 108 + len(ticket_id.encode("utf-8"))
+    if len(account_data) > checked_index and account_data[checked_index] == 1:
+        return "already_checked_in"
+
     instruction = Instruction(program_id, [
         AccountMeta(scanner.pubkey(), is_signer=True, is_writable=False),
         AccountMeta(event_pda, is_signer=False, is_writable=False),
