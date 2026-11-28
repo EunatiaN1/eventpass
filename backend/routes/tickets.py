@@ -96,6 +96,37 @@ async def list_tickets(
     return enriched
 
 
+@router.get("/{ticket_id}/metadata.json")
+async def ticket_metadata(
+    ticket_id: str,
+    db: Any = Depends(get_supabase_client),
+) -> Dict[str, Any]:
+    """Public immutable-URI metadata served to Metaplex Core indexers."""
+    response = db.table("tickets").select("*").eq("id", ticket_id).execute()
+    if not response.data or not response.data[0].get("asset_address"):
+        raise HTTPException(status_code=404, detail="Minted ticket metadata not found.")
+    ticket = response.data[0]
+    event_response = db.table("events").select("*").eq("id", ticket["event_id"]).execute()
+    if not event_response.data:
+        raise HTTPException(status_code=404, detail="Ticket event not found.")
+    event = event_response.data[0]
+    metadata: Dict[str, Any] = {
+        "name": f"{event['title']} Ticket",
+        "symbol": "EVTP",
+        "description": f"EventPass admission ticket for {event['title']} at {event.get('venue', 'the event venue')}.",
+        "external_url": "https://eventpass.co.za",
+        "attributes": [
+            {"trait_type": "Event", "value": event["title"]},
+            {"trait_type": "Venue", "value": event.get("venue", "")},
+            {"trait_type": "Ticket Tier", "value": ticket.get("tier", "General Admission")},
+        ],
+        "properties": {"category": "ticket"},
+    }
+    if event.get("image_url"):
+        metadata["image"] = event["image_url"]
+    return metadata
+
+
 @router.get("/{ticket_id}/credential", response_model=TicketCredentialResponse)
 async def get_ticket_credential(
     ticket_id: str,

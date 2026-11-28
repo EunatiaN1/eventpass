@@ -2,6 +2,7 @@
 
 from functools import lru_cache
 from typing import List
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 PLACEHOLDER_URLS = {"", "https://your-project-ref.supabase.co"}
@@ -41,6 +42,11 @@ class Settings(BaseSettings):
 
     # Fiat payment secrets
     payfast_secret: str = ""
+    payfast_merchant_id: str = ""
+    payfast_merchant_key: str = ""
+    payfast_passphrase: str = ""
+    payfast_sandbox: bool = True
+    app_public_url: str = "https://eventpass.co.za"
     paystack_secret: str = ""
 
     # Passwordless email OTP delivery (Resend)
@@ -51,7 +57,9 @@ class Settings(BaseSettings):
     x402_pay_to_address: str = "DevnetTreasuryWallet11111111111111111111111"
     x402_facilitator_url: str = "https://x402.org/facilitator"
     zar_to_usdc_rate: str = "0.055"
-    solana_private_key: str = ""
+    solana_private_key: str = Field(default="", validation_alias=AliasChoices("BACKEND_SOLANA_PRIVATE_KEY", "SOLANA_PRIVATE_KEY"))
+    solana_rpc_url: str = "https://api.devnet.solana.com"
+    eventpass_program_id: str = ""
 
     # QR signing
     qr_signing_secret: str = "devnet-qr-credential-signing-key-change-in-prod"

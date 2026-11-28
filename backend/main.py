@@ -18,10 +18,9 @@ from backend.routes.campaigns import router as campaigns_router
 from backend.routes.checkin import router as checkin_router
 from backend.routes.events import router as events_router
 from backend.routes.ledger import router as ledger_router
-from backend.routes.mock_payments import router as mock_payments_router
+from backend.routes.payfast import router as payfast_router
 from backend.routes.tickets import router as tickets_router
 from backend.routes.webhooks import router as webhooks_router
-from backend.routes.x402 import router as x402_router
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
@@ -35,6 +34,12 @@ async def lifespan(_app: FastAPI):
             missing.append("SUPABASE_URL and SUPABASE_KEY")
         if not settings.resend_api_key:
             missing.append("RESEND_API_KEY")
+        if not all((settings.payfast_merchant_id, settings.payfast_merchant_key, settings.payfast_passphrase)):
+            missing.append("PAYFAST_MERCHANT_ID, PAYFAST_MERCHANT_KEY, and PAYFAST_PASSPHRASE")
+        if not settings.solana_private_key:
+            missing.append("BACKEND_SOLANA_PRIVATE_KEY")
+        if not settings.eventpass_program_id:
+            missing.append("EVENTPASS_PROGRAM_ID (deployed Anchor program)")
         if (
             settings.jwt_secret == "devnet-jwt-secret-change-in-production-min-32-chars"
             or len(settings.jwt_secret) < 32
@@ -118,9 +123,8 @@ app.include_router(tickets_router)
 app.include_router(campaigns_router)
 app.include_router(checkin_router)
 app.include_router(ledger_router)
-app.include_router(mock_payments_router)
 app.include_router(webhooks_router)
-app.include_router(x402_router)
+app.include_router(payfast_router)
 
 # ---------------------------------------------------------------------------
 # Static files & SPA catch-all

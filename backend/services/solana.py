@@ -1,255 +1,228 @@
-"""Real Solana Devnet transfer for Metaplex Core assets using solana-py + solders.
-
-Architecture decision:
-  Metaplex Core uses a custom program (mpl-core) with its own instruction set.
-  We build the transfer instruction manually against the program's on-chain ABI
-  since there is no official Python SDK for mpl-core. The instruction layout
-  matches the Metaplex Core IDL v1 transfer discriminator.
-
-  Discriminator for `transfer`: [163, 52, 200, 231, 140, 3, 69, 186]  (anchor hash)
-
-  If the private key is absent or Devnet is unreachable, the function falls back
-  to logging and marks the job as `needs_reconciliation` for the CRON to retry.
-"""
-
+"""EventPass Anchor program client for real Solana Devnet transactions."""
 from __future__ import annotations
 
-import asyncio
+import hashlib
+import json
 import logging
-import struct
-from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Any
+
+from backend.config import Settings
 
 logger = logging.getLogger(__name__)
-
-# ---------------------------------------------------------------------------
-# Metaplex Core program ID on all clusters
-# ---------------------------------------------------------------------------
-MPL_CORE_PROGRAM_ID = "CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d"
-
-# Transfer instruction discriminator (Anchor sha256("global:transfer")[:8])
-TRANSFER_DISCRIMINATOR = bytes([163, 52, 200, 231, 140, 3, 69, 186])
+SYSTEM_PROGRAM_ID = "11111111111111111111111111111111"
 
 
-def _load_keypair(b58_private_key: str):
-    """Decode a base-58 64-byte secret key into a solders Keypair."""
+class SolanaConfigurationError(RuntimeError):
+    pass
+
+
+def _keypair(secret: str):
     import base58
-    from solders.keypair import Keypair  # type: ignore
+    from solders.keypair import Keypair
 
-    raw = base58.b58decode(b58_private_key)
+    value = secret.strip()
+    if value.startswith("["):
+        raw = bytes(json.loads(value))
+    else:
+        raw = base58.b58decode(value)
     if len(raw) == 64:
         return Keypair.from_bytes(raw)
     if len(raw) == 32:
         return Keypair.from_seed(raw)
-    raise ValueError(f"Unexpected key length {len(raw)}: must be 32 or 64 bytes.")
+    raise SolanaConfigurationError("BACKEND_SOLANA_PRIVATE_KEY must encode a 32- or 64-byte keypair.")
 
 
-def _build_transfer_ix(
-    asset_pubkey,
-    authority_pubkey,
-    new_owner_pubkey,
-    payer_pubkey,
-):
-    """
-    Build a Metaplex Core 'transfer' instruction.
+def _program_id(settings: Settings):
+    from solders.pubkey import Pubkey
 
-    Accounts (positional, matching mpl-core IDL):
-      0  asset         – the Core NFT account (writable)
-      1  collection    – optional collection (can be omitted / program_id as placeholder)
-      2  payer         – pays for any reallocs (writable, signer)
-      3  authority     – current owner / update authority (signer)
-      4  newOwner      – recipient (writable)
-      5  systemProgram – 11111…
-      6  logWrapper    – noop (spl-noop) or system program
-    """
-    from solders.instruction import AccountMeta, Instruction  # type: ignore
-    from solders.pubkey import Pubkey  # type: ignore
+    value = settings.eventpass_program_id.strip()
+    if not value:
+        raise SolanaConfigurationError("EVENTPASS_PROGRAM_ID is required before on-chain operations.")
+    try:
+        return Pubkey.from_string(value)
+    except ValueError as exc:
+        raise SolanaConfigurationError("EVENTPASS_PROGRAM_ID is not a valid Solana address.") from exc
 
-    SYSTEM_PROGRAM = Pubkey.from_string("11111111111111111111111111111111")
-    SPL_NOOP = Pubkey.from_string("noopb9bkMVfRPU8AsbpTUg8AQkHtKwMYZiFUjNRtMmV")
 
-    # compressionProof argument: None → serialize as option byte 0x00
-    data = TRANSFER_DISCRIMINATOR + b"\x00"
+def _string(value: str) -> bytes:
+    encoded = value.encode("utf-8")
+    if len(encoded) > 200:
+        raise ValueError("Anchor string argument exceeds 200 bytes.")
+    return len(encoded).to_bytes(4, "little") + encoded
 
-    accounts = [
-        AccountMeta(pubkey=asset_pubkey, is_signer=False, is_writable=True),
-        # collection (None in our case – pass system program as placeholder)
-        AccountMeta(pubkey=SYSTEM_PROGRAM, is_signer=False, is_writable=False),
-        AccountMeta(pubkey=payer_pubkey, is_signer=True, is_writable=True),
-        AccountMeta(pubkey=authority_pubkey, is_signer=True, is_writable=False),
-        AccountMeta(pubkey=new_owner_pubkey, is_signer=False, is_writable=False),
-        AccountMeta(pubkey=SYSTEM_PROGRAM, is_signer=False, is_writable=False),
-        AccountMeta(pubkey=SPL_NOOP, is_signer=False, is_writable=False),
-    ]
 
-    return Instruction(
-        program_id=Pubkey.from_string(MPL_CORE_PROGRAM_ID),
-        accounts=accounts,
-        data=bytes(data),
+async def _send_instruction(settings: Settings, instruction, authority):
+    from solana.rpc.async_api import AsyncClient
+    from solana.rpc.commitment import Confirmed
+    from solders.message import Message
+    from solders.transaction import Transaction
+
+    async with AsyncClient(settings.solana_rpc_url, commitment=Confirmed, timeout=30) as client:
+        blockhash = (await client.get_latest_blockhash(commitment=Confirmed)).value.blockhash
+        message = Message.new_with_blockhash(
+            [instruction],
+            fee_payer=authority.pubkey(),
+            blockhash=blockhash,
+        )
+        transaction = Transaction([authority], message, blockhash)
+        signature = (await client.send_transaction(transaction)).value
+        confirmation = await client.confirm_transaction(signature, commitment=Confirmed)
+        if not confirmation.value or confirmation.value[0].err:
+            raise RuntimeError(f"Solana transaction failed confirmation: {confirmation.value}")
+        return str(signature)
+
+
+def _anchor_discriminator(name: str) -> bytes:
+    return hashlib.sha256(f"global:{name}".encode()).digest()[:8]
+
+
+async def initialize_event(event_id: str, organizer_wallet: str, settings: Settings) -> tuple[str, str]:
+    from solders.instruction import AccountMeta, Instruction
+    from solders.pubkey import Pubkey
+
+    program_id = _program_id(settings)
+    authority = _keypair(settings.solana_private_key)
+    organizer = Pubkey.from_string(organizer_wallet)
+    event_pda, _ = Pubkey.find_program_address([b"event", event_id.encode()], program_id)
+    system_program = Pubkey.from_string(SYSTEM_PROGRAM_ID)
+    data = _anchor_discriminator("initialize_event") + _string(event_id) + bytes(organizer)
+    instruction = Instruction(
+        program_id,
+        [
+            AccountMeta(authority.pubkey(), is_signer=True, is_writable=True),
+            AccountMeta(event_pda, is_signer=False, is_writable=True),
+            AccountMeta(system_program, is_signer=False, is_writable=False),
+        ],
+        data,
     )
+    signature = await _send_instruction(settings, instruction, authority)
+    logger.info("eventpass initialize_event confirmed event_id=%s signature=%s", event_id, signature)
+    return str(event_pda), signature
 
 
-async def _execute_transfer(
-    asset_address: str,
-    to_wallet: str,
-    private_key_b58: str,
-    rpc_url: str = "https://api.devnet.solana.com",
+async def mint_ticket(
+    *,
+    event_id: str,
+    ticket_id: str,
+    name: str,
+    uri: str,
+    owner_wallet: str,
+    settings: Settings,
+) -> tuple[str, str | None]:
+    """Mint a Core asset using the deployed EventPass Anchor program.
+
+    Returns the deterministic asset PDA and transaction signature. If the
+    on-chain ticket record already exists and matches, returns None signature.
+    """
+    from solana.rpc.async_api import AsyncClient
+    from solders.instruction import AccountMeta, Instruction
+    from solders.pubkey import Pubkey
+
+    program_id = _program_id(settings)
+    authority = _keypair(settings.solana_private_key)
+    organizer = Pubkey.from_string(owner_wallet)
+    event_pda, _ = Pubkey.find_program_address([b"event", event_id.encode()], program_id)
+    record_pda, _ = Pubkey.find_program_address([b"ticket", ticket_id.encode()], program_id)
+    asset_pda, _ = Pubkey.find_program_address([b"asset", ticket_id.encode()], program_id)
+    core_program = Pubkey.from_string("CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d")
+    system_program = Pubkey.from_string(SYSTEM_PROGRAM_ID)
+
+    async with AsyncClient(settings.solana_rpc_url, timeout=30) as client:
+        existing = await client.get_account_info(record_pda)
+        account = existing.value
+        if account is not None:
+            data = bytes(account.data)
+            if account.owner != program_id or len(data) < 104:
+                raise RuntimeError("Existing on-chain ticket record is invalid.")
+            if data[8:40] != bytes(event_pda) or data[40:72] != bytes(asset_pda) or data[72:104] != bytes(organizer):
+                raise RuntimeError("Existing on-chain ticket record does not match this order.")
+            return str(asset_pda), None
+
+        data = (
+            _anchor_discriminator("mint_ticket")
+            + _string(event_id)
+            + _string(ticket_id)
+            + _string(name)
+            + _string(uri)
+        )
+        instruction = Instruction(
+            program_id,
+            [
+                AccountMeta(authority.pubkey(), is_signer=True, is_writable=True),
+                AccountMeta(event_pda, is_signer=False, is_writable=False),
+                AccountMeta(record_pda, is_signer=False, is_writable=True),
+                AccountMeta(asset_pda, is_signer=False, is_writable=True),
+                AccountMeta(organizer, is_signer=False, is_writable=False),
+                AccountMeta(core_program, is_signer=False, is_writable=False),
+                AccountMeta(system_program, is_signer=False, is_writable=False),
+            ],
+            data,
+        )
+        from solana.rpc.commitment import Confirmed
+        from solders.message import Message
+        from solders.transaction import Transaction
+
+        blockhash = (await client.get_latest_blockhash(commitment=Confirmed)).value.blockhash
+        message = Message.new_with_blockhash([instruction], authority.pubkey(), blockhash)
+        transaction = Transaction([authority], message, blockhash)
+        signature = (await client.send_transaction(transaction)).value
+        confirmation = await client.confirm_transaction(signature, commitment=Confirmed)
+        if not confirmation.value or confirmation.value[0].err:
+            raise RuntimeError(f"Solana mint failed confirmation: {confirmation.value}")
+        logger.info("eventpass mint_ticket confirmed ticket_id=%s asset=%s signature=%s", ticket_id, asset_pda, signature)
+        return str(asset_pda), str(signature)
+
+
+async def check_in_ticket(
+    *, event_id: str, ticket_id: str, settings: Settings
 ) -> str:
-    """
-    Build, sign, and send the mpl-core transfer transaction.
-    Returns the transaction signature string on success.
-    Raises on failure.
-    """
-    from solana.rpc.async_api import AsyncClient  # type: ignore
-    from solana.rpc.commitment import Confirmed  # type: ignore
-    from solders.pubkey import Pubkey  # type: ignore
-    from solders.transaction import Transaction  # type: ignore
-    from solders.message import Message  # type: ignore
+    from solana.rpc.async_api import AsyncClient
+    from solders.instruction import AccountMeta, Instruction
+    from solders.pubkey import Pubkey
+    from solders.message import Message
+    from solders.transaction import Transaction
 
-    authority_kp = _load_keypair(private_key_b58)
-    authority_pk = authority_kp.pubkey()
-    asset_pk = Pubkey.from_string(asset_address)
-    new_owner_pk = Pubkey.from_string(to_wallet)
+    program_id = _program_id(settings)
+    scanner = _keypair(settings.solana_private_key)
+    event_pda, _ = Pubkey.find_program_address([b"event", event_id.encode()], program_id)
+    record_pda, _ = Pubkey.find_program_address([b"ticket", ticket_id.encode()], program_id)
+    account_info = await _asset_from_record(settings, record_pda)
+    asset = Pubkey.from_string(account_info)
+    data = _anchor_discriminator("check_in") + _string(event_id) + _string(ticket_id)
+    async with AsyncClient(settings.solana_rpc_url, timeout=30) as client:
+        existing = (await client.get_account_info(record_pda)).value
+    if existing is None or existing.owner != program_id:
+        raise RuntimeError("On-chain ticket record was not found.")
+    account_data = bytes(existing.data)
+    checked_index = 108 + len(ticket_id.encode("utf-8"))
+    if len(account_data) > checked_index and account_data[checked_index] == 1:
+        return "already_checked_in"
 
-    ix = _build_transfer_ix(
-        asset_pubkey=asset_pk,
-        authority_pubkey=authority_pk,
-        new_owner_pubkey=new_owner_pk,
-        payer_pubkey=authority_pk,
+    instruction = Instruction(program_id, [
+        AccountMeta(scanner.pubkey(), is_signer=True, is_writable=False),
+        AccountMeta(event_pda, is_signer=False, is_writable=False),
+        AccountMeta(record_pda, is_signer=False, is_writable=True),
+        AccountMeta(asset, is_signer=False, is_writable=False),
+    ], data)
+    return await _send_instruction(settings, instruction, scanner)
+
+
+async def _asset_from_record(settings: Settings, record_pda) -> str:
+    from solana.rpc.async_api import AsyncClient
+    from solders.pubkey import Pubkey
+
+    program_id = _program_id(settings)
+    async with AsyncClient(settings.solana_rpc_url, commitment="confirmed", timeout=30) as client:
+        account = (await client.get_account_info(record_pda)).value
+    if account is None or account.owner != program_id or len(bytes(account.data)) < 72:
+        raise RuntimeError("On-chain ticket record was not found.")
+    return str(Pubkey.from_bytes(bytes(account.data)[40:72]))
+
+
+# Backwards-compatible name retained for the resale settlement route. Direct
+# transfers are intentionally rejected until assets are minted with a transfer
+# delegate and the resale instruction is deployed.
+def finalize_solana_transfer(ticket_id: str, buyer_wallet: str | None, db: Any = None) -> None:
+    raise RuntimeError(
+        "On-chain resale transfers are unavailable until transfer delegation is configured."
     )
-
-    async with AsyncClient(rpc_url) as client:
-        # Fetch a fresh blockhash
-        blockhash_resp = await client.get_latest_blockhash(commitment=Confirmed)
-        recent_blockhash = blockhash_resp.value.blockhash
-
-        msg = Message.new_with_blockhash(
-            [ix],
-            fee_payer=authority_pk,
-            blockhash=recent_blockhash,
-        )
-        tx = Transaction([authority_kp], msg, recent_blockhash)
-
-        result = await client.send_transaction(
-            tx,
-            opts={"skip_preflight": False, "preflight_commitment": "confirmed"},
-        )
-        sig = str(result.value)
-
-        # Wait for confirmation (up to ~30 s)
-        await client.confirm_transaction(sig, commitment=Confirmed)
-
-    return sig
-
-
-def finalize_solana_transfer(
-    ticket_id: str,
-    buyer_wallet: Optional[str],
-    db: Any = None,
-) -> None:
-    """
-    Real Metaplex Core transfer dispatched as a FastAPI BackgroundTask.
-
-    1. Loads backend hot-wallet from settings.
-    2. Builds & sends the on-chain mpl-core transfer instruction.
-    3. On success → marks outbox_job 'completed', updates ticket status to 'transferred'.
-    4. On failure → marks outbox_job 'needs_reconciliation' (CRON will retry up to 3×).
-    """
-    # Import lazily to avoid circular imports at module load time
-    from backend.config import get_settings
-
-    settings = get_settings()
-    private_key = settings.solana_private_key.strip()
-
-    # -----------------------------------------------------------------------
-    # Resolve the asset_address from the DB
-    # -----------------------------------------------------------------------
-    asset_address: Optional[str] = None
-    if db is not None:
-        try:
-            t_resp = db.table("tickets").select("asset_address").eq("id", ticket_id).execute()
-            if t_resp.data:
-                asset_address = t_resp.data[0].get("asset_address")
-        except Exception:
-            pass
-
-    # -----------------------------------------------------------------------
-    # Guard: missing key or placeholder wallet → log and mark reconciliation
-    # -----------------------------------------------------------------------
-    if not private_key or not buyer_wallet or not asset_address:
-        reason = (
-            "no private key configured"
-            if not private_key
-            else "missing buyer_wallet or asset_address"
-        )
-        logger.warning(
-            "Solana transfer skipped (ticket_id=%s): %s – marking needs_reconciliation",
-            ticket_id,
-            reason,
-        )
-        _mark_outbox(db, ticket_id, "needs_reconciliation", error=reason)
-        return
-
-    # -----------------------------------------------------------------------
-    # Execute the real on-chain transfer
-    # -----------------------------------------------------------------------
-    try:
-        sig = asyncio.run(
-            _execute_transfer(
-                asset_address=asset_address,
-                to_wallet=buyer_wallet,
-                private_key_b58=private_key,
-                rpc_url="https://api.devnet.solana.com",
-            )
-        )
-        logger.info(
-            "✅ Solana transfer confirmed ticket_id=%s → %s  sig=%s",
-            ticket_id,
-            buyer_wallet,
-            sig,
-        )
-        _mark_outbox(db, ticket_id, "completed", tx_signature=sig)
-        # Advance ticket to 'transferred'
-        if db is not None:
-            db.table("tickets").update(
-                {"status": "transferred", "updated_at": datetime.now(timezone.utc).isoformat()}
-            ).eq("id", ticket_id).execute()
-
-    except Exception as exc:  # noqa: BLE001
-        logger.error(
-            "❌ Solana transfer failed ticket_id=%s: %s – marking needs_reconciliation",
-            ticket_id,
-            exc,
-        )
-        _mark_outbox(db, ticket_id, "needs_reconciliation", error=str(exc))
-
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-def _mark_outbox(
-    db: Any,
-    ticket_id: str,
-    status: str,
-    tx_signature: Optional[str] = None,
-    error: Optional[str] = None,
-) -> None:
-    """Update the outbox_jobs row for this ticket's solana_devnet_transfer job."""
-    if db is None:
-        return
-    try:
-        payload: dict[str, Any] = {
-            "status": status,
-            "updated_at": datetime.now(timezone.utc).isoformat(),
-        }
-        if tx_signature:
-            payload["tx_signature"] = tx_signature
-        if error:
-            payload["last_error"] = error[:500]
-
-        db.table("outbox_jobs").update(payload).eq("job_type", "solana_devnet_transfer").eq(
-            "payload->>ticket_id", ticket_id
-        ).execute()
-    except Exception as e:  # noqa: BLE001
-        logger.warning("Could not update outbox_jobs for ticket_id=%s: %s", ticket_id, e)

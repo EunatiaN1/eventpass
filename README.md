@@ -56,9 +56,9 @@ Use Expo-compatible native libraries only in this app. Build iOS and Android wit
 - Event, ticket, resale campaign, checkout, refund, x402, ledger, webhook, and check-in routes are under `/api`.
 - Browser auth uses an HttpOnly session cookie; native auth receives a bearer session token and stores it in SecureStore.
 - Supabase service credentials, Resend credentials, payment provider secrets, and Solana private keys belong only in backend secrets. Never expose these as `VITE_` or `EXPO_PUBLIC_` variables.
-- `backend/services/solana.py` contains the Devnet Core transfer path; configure and verify the backend wallet/RPC before treating any transfer as settled.
+- `backend/services/solana.py` calls the EventPass Anchor program for event initialization, Core ticket minting, and check-in. Resale asset transfers remain disabled until transfer delegation is implemented and deployed.
 
-**Hackathon demo note:** The Anchor program is mocked for the frontend demo; this repository does not currently contain an Anchor/Rust program workspace, and no on-chain `check_in` instruction or AppData plugin update has been deployed. The app’s mobile, web, and API boundaries are designed to support a production Anchor integration, but the current mock does not change chain state.
+The Anchor program source is in `anchor/` and includes event initialization, Metaplex Core ticket minting, and check-in instructions. It has not been built or deployed to Devnet yet. The backend will refuse chain operations until a generated program keypair is deployed and its program ID and authority are configured. See `anchor/README.md` for deployment steps. The browser still needs a wallet connection and PayFast redirect flow before purchases can use this backend.
 
 ## Local development
 

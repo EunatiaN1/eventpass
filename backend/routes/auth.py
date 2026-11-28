@@ -96,11 +96,8 @@ async def request_otp(
             ).execute()
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Email delivery is temporarily unavailable. Please try again.",
+                detail=str(exc),
             ) from exc
-    elif settings.use_dev_store and settings.environment != "production":
-        # Local-only development path; production never returns an OTP in an API response.
-        response["dev_sandbox_otp"] = code
     else:
         db.table("otp_challenges").update({"consumed": True}).eq(
             "code_hash", code_hash

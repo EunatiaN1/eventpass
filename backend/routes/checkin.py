@@ -2,10 +2,11 @@
 
 from contextlib import nullcontext
 from datetime import datetime, timezone
+import logging
 from typing import Any, Dict, List
 import uuid
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 
 from backend.auth import AuthenticatedUser, get_current_user
 from backend.config import Settings, get_settings
@@ -14,8 +15,10 @@ from backend.schemas.checkin import CheckInRequest, CheckInResponse
 from backend.schemas.common import TicketStatus
 from backend.services.credentials import verify_qr_credential
 from backend.services.ledger import append_audit_log, append_ownership_history
+from backend.services.solana import check_in_ticket
 
 router = APIRouter(tags=["check-in"])
+logger = logging.getLogger(__name__)
 
 
 @router.post("/api/check-in", response_model=CheckInResponse)
@@ -87,6 +90,19 @@ async def validate_and_check_in(
                 owner_wallet=ticket.get("owner_wallet"),
                 credential_version=token_ver,
             )
+
+        try:
+            await check_in_ticket(
+                event_id=str(ticket["event_id"]),
+                ticket_id=str(ticket_id),
+                settings=settings,
+            )
+        except Exception as exc:
+            logger.exception("Devnet check-in failed ticket_id=%s", ticket_id)
+            raise HTTPException(
+                status_code=503,
+                detail="On-chain check-in failed; admission was not recorded.",
+            ) from exc
 
         now = datetime.now(timezone.utc).isoformat()
         db.table("tickets").update(
