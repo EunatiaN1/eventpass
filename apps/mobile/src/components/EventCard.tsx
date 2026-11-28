@@ -76,9 +76,9 @@ export function EventCard({ event, onBuy }: { event: EventItem; onBuy: (event: E
 }
 
 const styles = StyleSheet.create({
-  animated: { marginHorizontal: spacing.lg, marginBottom: spacing.lg },
+  animated: { flex: 1, marginBottom: spacing.md },
   card: { borderRadius: radius.lg },
-  imageWrap: { height: 200, overflow: "hidden" },
+  imageWrap: { height: 176, overflow: "hidden" },
   badge: {
     position: "absolute", top: 14, left: 14, flexDirection: "row", alignItems: "center", gap: 7,
     borderRadius: radius.pill, paddingHorizontal: 11, paddingVertical: 7,
@@ -88,12 +88,12 @@ const styles = StyleSheet.create({
   badgeText: { fontSize: 9, fontWeight: "700", color: colors.text, letterSpacing: 1.1 },
   priceBadge: { position: "absolute", top: 14, right: 14, borderRadius: radius.pill, paddingHorizontal: 12, paddingVertical: 7, backgroundColor: "rgba(10,10,10,0.7)" },
   priceText: { color: colors.text, fontSize: 13, fontWeight: "700" },
-  details: { padding: spacing.lg, paddingTop: 10, gap: 11, backgroundColor: "#0A0A0A" },
-  title: { ...typography.heading, color: colors.text, marginBottom: 2 },
+  details: { padding: 14, paddingTop: 10, gap: 9, backgroundColor: "#0A0A0A" },
+  title: { ...typography.heading, color: colors.text, fontSize: 15, lineHeight: 19, marginBottom: 2 },
   metaRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  metaText: { color: colors.secondary, fontSize: 13, flexShrink: 1 },
+  metaText: { color: colors.secondary, fontSize: 11, flexShrink: 1 },
   protectionRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 1 },
-  protectionText: { color: colors.emerald, fontSize: 12, fontWeight: "600" },
-  buyButton: { marginTop: 6, minHeight: 50, borderRadius: radius.md, backgroundColor: colors.orange, alignItems: "center", justifyContent: "center" },
-  buyText: { color: colors.text, fontSize: 14, fontWeight: "700" },
+  protectionText: { color: colors.emerald, fontSize: 10, fontWeight: "600", flexShrink: 1 },
+  buyButton: { marginTop: 5, minHeight: 46, borderRadius: radius.md, backgroundColor: colors.orange, alignItems: "center", justifyContent: "center", paddingHorizontal: 5 },
+  buyText: { color: colors.text, fontSize: 11, fontWeight: "700", textAlign: "center" },
 });

@@ -1,6 +1,6 @@
 # EventPass Mobile
 
-Expo Router client for iOS, Android, and web. It serves attendees, sellers, and gate staff while the separate Vite client owns public campaign landing pages and the organizer desktop dashboard.
+Expo Router client for attendees, sellers, and gate staff. The intended release targets are native iOS and Android; Vercel web deployment belongs to the separate Vite client.
 
 ## Run locally
 

@@ -183,7 +183,7 @@ async def verify_otp(
         max_age=settings.jwt_expire_minutes * 60,
         httponly=True,
         secure=settings.environment == "production",
-        samesite="lax",
+        samesite="none" if settings.environment == "production" else "lax",
         path="/",
     )
     return AuthSessionResponse(
@@ -205,7 +205,7 @@ async def sign_out(
         key="eventpass_session",
         httponly=True,
         secure=settings.environment == "production",
-        samesite="lax",
+        samesite="none" if settings.environment == "production" else "lax",
         path="/",
     )
     return response

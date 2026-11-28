@@ -1,13 +1,14 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { apiUrl } from "../lib/apiUrl";
 
 const AuthContext = createContext(null);
 
 async function authRequest(path, options = {}) {
   let response;
   try {
-    response = await fetch(path, {
+    response = await fetch(apiUrl(path), {
       ...options,
-      credentials: "same-origin",
+      credentials: "include",
       headers: {
         "Content-Type": "application/json",
         ...(options.headers || {}),

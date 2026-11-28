@@ -12,6 +12,7 @@ import { OrganizerLedgerView } from "./components/OrganizerLedgerView";
 import { QrCodeMatrix } from "./components/QrCodeMatrix";
 import { TicketPassCard } from "./components/TicketPassCard";
 import { useAuth } from "./contexts/AuthContext";
+import { apiUrl } from "./lib/apiUrl";
 
 export default function App() {
   const [activeTab, setActiveTab] = useState(() => {
@@ -53,9 +54,9 @@ export default function App() {
   }, []);
 
   const api = useCallback(async (path, options = {}) => {
-    const res = await fetch(path, {
+    const res = await fetch(apiUrl(path), {
       ...options,
-      credentials: "same-origin",
+      credentials: "include",
       headers: {
         "Content-Type": "application/json",
         ...(options.headers || {}),

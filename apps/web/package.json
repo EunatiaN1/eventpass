@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:fastapi": "vite build --mode fastapi",
     "preview": "vite preview"
   },
   "dependencies": {

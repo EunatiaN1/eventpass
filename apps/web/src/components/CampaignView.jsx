@@ -2,6 +2,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { ArrowLeft, CheckCircle2, Copy, ShieldCheck, Sparkles, Ticket, Wallet, X } from "lucide-react";
 import { useState } from "react";
 import { Button } from "./Button";
+import { apiUrl } from "../lib/apiUrl";
 
 export function CampaignView({
   campaigns,
@@ -34,7 +35,9 @@ export function CampaignView({
 
   const handleBuyX402Click = async (listing) => {
     onRequireAuth("Sign in to initiate x402 stablecoin settlement on Solana Devnet.", async () => {
-      const resp = await fetch(`/api/listings/${listing.id}/purchase-x402`);
+      const resp = await fetch(apiUrl(`/api/listings/${listing.id}/purchase-x402`), {
+        credentials: "include",
+      });
       setX402Modal({
         listingId: listing.id,
         status: resp.status,
