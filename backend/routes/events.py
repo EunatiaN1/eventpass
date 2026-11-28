@@ -77,6 +77,8 @@ async def create_event(
     db: Any = Depends(get_supabase_client),
 ) -> Dict[str, Any]:
     """Create a new event with organizer resale and 15-day refund window policy."""
+    if payload.organizer_wallet != _organizer.wallet and _organizer.role != "admin":
+        raise HTTPException(status_code=403, detail="Organizer wallet must match the signed-in organizer.")
     now = datetime.now(timezone.utc)
     event_id = str(uuid.uuid4())
     row = {
