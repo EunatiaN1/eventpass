@@ -11,7 +11,7 @@ from decimal import Decimal, InvalidOperation
 from urllib.parse import parse_qsl
 
 import httpx
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from supabase import Client
 
 from backend.auth import AuthenticatedUser, get_current_user
@@ -22,7 +22,6 @@ from backend.schemas.webhooks import WebhookResponse
 from backend.services.payfast import payfast_signature, verify_payfast_signature
 from backend.services.solana import mint_ticket
 from backend.services.ledger import append_ownership_history
-from backend.routes.webhooks import _process_webhook_settlement
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/payments/payfast", tags=["PayFast"])
@@ -108,7 +107,6 @@ async def _payfast_validate_notification(raw_body: bytes, settings: Settings) ->
 @router.post("/itn", response_model=WebhookResponse)
 async def receive_itn(
     request: Request,
-    background_tasks: BackgroundTasks,
     settings: Settings = Depends(get_settings),
     db: Client = Depends(get_supabase_client),
 ) -> WebhookResponse:
