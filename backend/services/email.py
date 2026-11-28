@@ -1,6 +1,10 @@
 """Transactional email delivery for passwordless sign-in codes."""
 
+import logging
+
 import httpx
+
+logger = logging.getLogger(__name__)
 
 
 class EmailDeliveryError(RuntimeError):
@@ -41,7 +45,10 @@ async def send_login_code(
                 json=payload,
             )
     except httpx.HTTPError as exc:
-        raise EmailDeliveryError("Unable to reach the email delivery service.") from exc
+        logger.exception("Resend request failed while sending sign-in OTP")
+        raise EmailDeliveryError(f"Unable to reach Resend: {exc}") from exc
 
     if response.is_error:
-        raise EmailDeliveryError("The email delivery service rejected the message.")
+        detail = response.text[:500]
+        logger.error("Resend rejected OTP request status=%s response=%s", response.status_code, detail)
+        raise EmailDeliveryError(f"Resend rejected the email (HTTP {response.status_code}): {detail}")
