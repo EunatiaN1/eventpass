@@ -1,0 +1,13 @@
+[features]
+seeds = false
+skip-lint = false
+
+[programs.devnet]
+eventpass = "C9PLf3qMCVqtUCJtEBy8NCcseNp3KTZwFJxAtDdN1bto"
+
+[provider]
+cluster = "Devnet"
+wallet = "~/.config/solana/id.json"
+
+[workspace]
+members = ["programs/eventpass"]
