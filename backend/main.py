@@ -82,7 +82,7 @@ app.add_middleware(
     allow_origins=settings.allowed_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "PAYMENT-SIGNATURE"],
+    allow_headers=["Authorization", "Content-Type", "PAYMENT-SIGNATURE", "X-Auth-Client"],
 )
 
 # ---------------------------------------------------------------------------

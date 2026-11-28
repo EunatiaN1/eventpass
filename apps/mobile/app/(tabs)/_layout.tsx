@@ -1,6 +1,6 @@
 import { BlurTargetView, BlurView } from "expo-blur";
 import { Tabs } from "expo-router";
-import { CalendarDays, Ticket, UserRound } from "lucide-react-native";
+import { CalendarDays, ScanLine, Ticket, UserRound } from "lucide-react-native";
 import { useRef } from "react";
 import { Platform, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -16,11 +16,12 @@ export default function TabLayout() {
     tabBarLabelStyle: { fontSize: 10, fontWeight: "700", marginBottom: Platform.OS === "ios" ? 0 : 5 },
     tabBarStyle: [styles.bar, { height: 58 + insets.bottom, paddingBottom: Math.max(insets.bottom, 8) }],
     tabBarBackground: () => <View style={styles.background}><BlurView blurTarget={Platform.OS === "android" ? targetRef : undefined} blurMethod={Platform.OS === "android" ? "dimezisBlurViewSdk31Plus" : undefined} tint="dark" intensity={50} style={StyleSheet.absoluteFill} /><View style={styles.border} /></View>,
-    tabBarIcon: ({ color, size }) => route.name === "index" ? <CalendarDays size={size} color={color} /> : route.name === "tickets" ? <Ticket size={size} color={color} /> : <UserRound size={size} color={color} />,
+    tabBarIcon: ({ color, size }) => route.name === "index" ? <CalendarDays size={size} color={color} /> : route.name === "tickets" ? <Ticket size={size} color={color} /> : route.name === "gate" ? <ScanLine size={size} color={color} /> : <UserRound size={size} color={color} />,
   })}>
     <Tabs.Screen name="index" options={{ title: "Events" }} />
     <Tabs.Screen name="tickets" options={{ title: "My Tickets" }} />
     <Tabs.Screen name="resale" options={{ title: "Resale" }} />
+    <Tabs.Screen name="gate" options={{ title: "Gate" }} />
   </Tabs></BlurTargetView>;
 }
 

@@ -2,7 +2,7 @@ import * as SecureStore from "expo-secure-store";
 import { createContext, PropsWithChildren, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { Platform } from "react-native";
 
-const API_BASE = (process.env.EXPO_PUBLIC_API_URL || "http://localhost:8000").replace(/\/$/, "");
+const API_BASE = (process.env.EXPO_PUBLIC_API_URL || "http://localhost:8001").replace(/\/$/, "");
 const TOKEN_KEY = "eventpass.session.jwt";
 
 export type EventPassUser = {

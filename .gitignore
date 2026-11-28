@@ -11,9 +11,12 @@ __pycache__/
 .venv/
 venv/
 
-# Node / Frontend
-frontend/node_modules/
-frontend/.vite/
+# Node / Frontends
+apps/mobile/node_modules/
+apps/mobile/.expo/
+apps/mobile/dist/
+apps/web/node_modules/
+apps/web/.vite/
 npm-debug.log*
 
 # OS

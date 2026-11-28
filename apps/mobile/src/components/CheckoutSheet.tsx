@@ -124,7 +124,7 @@ export function CheckoutSheet({ visible, event, user, onClose }: Props) {
         <BlurView intensity={50} tint="dark" style={StyleSheet.absoluteFill} />
         <Pressable style={StyleSheet.absoluteFill} onPress={dismiss} />
         <Animated.View entering={FadeInDown.duration(240)} style={styles.wrap}>
-          <GlassCard style={styles.sheet} contentStyle={styles.content} intensity={70}>
+          <GlassCard style={styles.sheet} contentStyle={styles.content} intensity={50}>
             <View style={styles.handle} />
             {receipt ? (
               <ScrollView contentContainerStyle={styles.receipt}>

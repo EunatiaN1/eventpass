@@ -1,4 +1,5 @@
 import { ArrowLeft, Mail, ShieldCheck, X } from "lucide-react-native";
+import { BlurView } from "expo-blur";
 import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -95,10 +96,11 @@ export function AuthModal({ visible, contextMessage, onClose, requestCode, verif
   return (
     <Modal visible={visible} transparent animationType="fade" statusBarTranslucent onRequestClose={() => dismiss()}>
       <View style={styles.overlay}>
+        <BlurView intensity={50} tint="dark" style={StyleSheet.absoluteFill} />
         <Pressable style={StyleSheet.absoluteFill} onPress={() => dismiss()} />
         <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.avoid}>
           <Animated.View entering={FadeInUp.duration(240)} style={styles.sheetWrap}>
-            <GlassCard style={styles.sheet} contentStyle={styles.sheetContent} intensity={70}>
+            <GlassCard style={styles.sheet} contentStyle={styles.sheetContent} intensity={50}>
               <View style={styles.topRow}>
                 {step === "code" ? (
                   <Pressable onPress={() => { setStep("email"); setError(""); }} style={styles.backButton}>
