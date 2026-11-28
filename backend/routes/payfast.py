@@ -1,8 +1,8 @@
 """PayFast Sandbox/Production checkout and ITN routes.
 
 ITNs are accepted only after signature verification and PayFast's server-side
-validation endpoint returns VALID. Successful resale payments are reconciled
-through the existing settlement service.
+validation endpoint returns VALID. Verified primary ticket payments mint Core assets through the EventPass Anchor
+program before the transaction is marked settled.
 """
 from __future__ import annotations
 
