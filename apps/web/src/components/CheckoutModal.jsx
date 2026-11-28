@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from "framer-motion";
-import { Copy, CreditCard, LoaderCircle, X, Zap } from "lucide-react";
+import { CreditCard, LoaderCircle, X, Zap } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "./Button";
@@ -11,43 +11,18 @@ const METHODS = [
   { id: "x402", label: "x402 · Crypto" },
 ];
 
-const BASE58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
-
-function makeSolanaReference() {
-  const bytes = new Uint8Array(32);
-  if (globalThis.crypto?.getRandomValues) globalThis.crypto.getRandomValues(bytes);
-  else bytes.forEach((_, i) => (bytes[i] = Math.floor(Math.random() * 256)));
-  let digits = [0];
-  for (const byte of bytes) {
-    let carry = byte;
-    for (let i = 0; i < digits.length; i += 1) {
-      carry += digits[i] << 8;
-      digits[i] = carry % 58;
-      carry = Math.floor(carry / 58);
-    }
-    while (carry) {
-      digits.push(carry % 58);
-      carry = Math.floor(carry / 58);
-    }
-  }
-  let leadingZeroes = 0;
-  while (leadingZeroes < bytes.length - 1 && bytes[leadingZeroes] === 0) leadingZeroes += 1;
-  return "1".repeat(leadingZeroes) + digits.reverse().map((digit) => BASE58[digit]).join("");
-}
-
 function formatZar(value) {
   return `R${Number(value || 0).toLocaleString("en-ZA")}`;
 }
 
-export function CheckoutModal({ event, quantity, order, api, onConfirm, onClose }) {
+export function CheckoutModal({ event, quantity, order, api, onConfirm, onCancel, onClose }) {
   const [method, setMethod] = useState("eft");
   const [busy, setBusy] = useState(false);
   const [receipt, setReceipt] = useState(null);
   const [error, setError] = useState("");
-  const [copied, setCopied] = useState(false);
   const [payTo, setPayTo] = useState("");
   const [usdcAmount, setUsdcAmount] = useState("0.00");
-  const reference = useMemo(makeSolanaReference, []);
+  const reference = order?.order_reference || "demo";
   const ticket = order?.tickets?.[0];
 
   useEffect(() => {
@@ -99,9 +74,7 @@ export function CheckoutModal({ event, quantity, order, api, onConfirm, onClose 
     }
   };
 
-  const solanaPayUrl = payTo
-    ? `solana:${payTo}?amount=${encodeURIComponent(usdcAmount)}&spl-token=EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v&reference=${reference}`
-    : "";
+  const demoReference = `EVENTPASS-DEMO:${reference}`;
 
   return (
     <AnimatePresence>
@@ -109,7 +82,7 @@ export function CheckoutModal({ event, quantity, order, api, onConfirm, onClose 
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        onClick={receipt ? undefined : onClose}
+        onClick={receipt || busy ? undefined : onCancel}
         className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/75 backdrop-blur-sm p-0 sm:p-4"
       >
         <motion.section
@@ -155,7 +128,7 @@ export function CheckoutModal({ event, quantity, order, api, onConfirm, onClose 
                   Simulation receipt
                 </span>
                 <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">
-                  Payment Successful via {receipt.method === "x402" ? "x402" : receipt.method.toUpperCase()}
+                  Demo checkout complete · {receipt.method === "x402" ? "x402" : receipt.method.toUpperCase()}
                 </h2>
                 <p className="mt-2 text-sm text-white/60">{event.title}</p>
               </div>
@@ -184,14 +157,14 @@ export function CheckoutModal({ event, quantity, order, api, onConfirm, onClose 
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <p className="text-[10px] font-semibold uppercase tracking-[.24em] text-[#FF8A35]">
-                    Secure checkout · Test mode
+                    Simulated checkout · Demo only
                   </p>
                   <h2 id="checkout-title" className="mt-1 text-2xl font-semibold tracking-tight text-white">
                     Complete Your Purchase
                   </h2>
                   <p className="mt-1 text-sm text-white/55">{event.title} · {quantity} ticket{quantity > 1 ? "s" : ""}</p>
                 </div>
-                <Button variant="ghost" size="sm" onClick={onClose} aria-label="Close checkout">
+                <Button variant="ghost" size="sm" onClick={onCancel} disabled={busy} aria-label="Close checkout">
                   <X className="h-4 w-4" />
                 </Button>
               </div>
@@ -201,7 +174,7 @@ export function CheckoutModal({ event, quantity, order, api, onConfirm, onClose 
                   <button
                     key={item.id}
                     type="button"
-                    onClick={() => { setMethod(item.id); setError(""); }}
+                    disabled={busy}\n                    onClick={() => { setMethod(item.id); setError(""); }}
                     className={`flex-1 rounded-xl px-2 py-2.5 text-xs font-semibold transition-colors ${
                       method === item.id
                         ? "bg-white/10 text-white shadow-inner"
@@ -230,7 +203,7 @@ export function CheckoutModal({ event, quantity, order, api, onConfirm, onClose 
                   </div>
                   <Button variant="primary" size="lg" fullWidth disabled={busy || !ticket} onClick={simulatePayment}>
                     {busy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}
-                    Simulate EFT Payment Received · {formatZar(order?.total_zar)}
+                    Complete EFT demo · {formatZar(order?.total_zar)}
                   </Button>
                 </div>
               )}
@@ -265,26 +238,26 @@ export function CheckoutModal({ event, quantity, order, api, onConfirm, onClose 
                 <div className="space-y-4">
                   <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/[.045] p-4">
                     <div>
-                      <p className="text-[10px] uppercase tracking-widest text-white/45">Payment request</p>
+                      <p className="text-[10px] uppercase tracking-widest text-white/45">Demo amount only</p>
                       <p className="mt-1 text-xl font-semibold text-white">${usdcAmount} <span className="text-xs text-white/45">USDC</span></p>
-                      <p className="mt-1 text-xs text-white/50">Solana Devnet</p>
+                      <p className="mt-1 text-xs text-white/50">No network payment</p>
                     </div>
-                    {solanaPayUrl ? <div className="rounded-xl bg-white p-2"><QRCodeSVG value={solanaPayUrl} size={112} level="M" /></div> : <div className="flex h-[128px] w-[128px] items-center justify-center rounded-xl bg-white/5 text-white/40"><LoaderCircle className="h-5 w-5 animate-spin" /></div>}
+                    <div className="rounded-xl bg-white p-2"><QRCodeSVG value={demoReference} size={112} level="M" /></div>
                   </div>
                   <div className="rounded-xl border border-white/10 bg-black/30 p-3">
-                    <p className="text-[10px] uppercase tracking-wider text-white/40">payTo · Devnet</p>
-                    <p className="mt-1 break-all font-mono text-[11px] text-white/75">{payTo || "Loading checkout destination…"}</p>
+                    <p className="text-[10px] uppercase tracking-wider text-white/40">Demo reference</p>
+                    <p className="mt-1 break-all font-mono text-[11px] text-white/75">{reference}</p>
                   </div>
-                  <div className="flex items-center gap-2 text-[11px] text-white/45"><Zap className="h-3.5 w-3.5 text-[#00E676]" /> Unique Solana Pay reference generated for this checkout.</div>
-                  <Button variant="primary" size="lg" fullWidth disabled={busy || !ticket || !payTo} onClick={simulatePayment}>
+                  <div className="flex items-center gap-2 text-[11px] text-white/45"><Zap className="h-3.5 w-3.5 text-[#00E676]" /> The QR code is a demo reference; it will not open a wallet.</div>
+                  <Button variant="primary" size="lg" fullWidth disabled={busy || !ticket} onClick={simulatePayment}>
                     {busy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}
-                    {busy ? "Verifying test payment…" : "Verify x402 Payment"}
+                    {busy ? "Completing demo…" : "Complete x402 demo"}
                   </Button>
                 </div>
               )}
 
               {error && <p role="alert" className="rounded-xl border border-red-400/20 bg-red-400/10 px-3 py-2 text-xs text-red-200">{error}</p>}
-              <p className="text-center text-[10px] leading-relaxed text-white/35">This is a checkout simulation. No real payment is processed; x402 does not verify or submit a blockchain transaction.</p>
+              <p className="text-center text-[10px] leading-relaxed text-white/35">Demo only. No money moves, no wallet opens, and no blockchain transaction is submitted or verified.</p>
               {!ticket && <div className="flex items-center justify-center gap-2 text-xs text-white/50"><LoaderCircle className="h-3.5 w-3.5 animate-spin" /> Preparing your test order…</div>}
             </div>
           )}
