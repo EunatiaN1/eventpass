@@ -58,7 +58,7 @@ Use Expo-compatible native libraries only in this app. Build iOS and Android wit
 - Supabase service credentials, Resend credentials, payment provider secrets, and Solana private keys belong only in backend secrets. Never expose these as `VITE_` or `EXPO_PUBLIC_` variables.
 - `backend/services/solana.py` contains the Devnet Core transfer path; configure and verify the backend wallet/RPC before treating any transfer as settled.
 
-The repository does not currently contain an Anchor/Rust program workspace. Do not claim that an Anchor `check_in` instruction or an on-chain AppData plugin update has been deployed. The existing gate check-in is validated and recorded through FastAPI.
+**Hackathon demo note:** The Anchor program is mocked for the frontend demo; this repository does not currently contain an Anchor/Rust program workspace, and no on-chain `check_in` instruction or AppData plugin update has been deployed. The app’s mobile, web, and API boundaries are designed to support a production Anchor integration, but the current mock does not change chain state.
 
 ## Local development
 
