@@ -36,6 +36,12 @@ async def lifespan(_app: FastAPI):
             missing.append("SUPABASE_URL and SUPABASE_KEY")
         if not settings.resend_api_key:
             missing.append("RESEND_API_KEY")
+        if not all((settings.payfast_merchant_id, settings.payfast_merchant_key, settings.payfast_passphrase)):
+            missing.append("PAYFAST_MERCHANT_ID, PAYFAST_MERCHANT_KEY, and PAYFAST_PASSPHRASE")
+        if not settings.solana_private_key:
+            missing.append("BACKEND_SOLANA_PRIVATE_KEY")
+        if not settings.eventpass_program_id:
+            missing.append("EVENTPASS_PROGRAM_ID (deployed Anchor program)")
         if (
             settings.jwt_secret == "devnet-jwt-secret-change-in-production-min-32-chars"
             or len(settings.jwt_secret) < 32
