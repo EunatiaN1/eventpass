@@ -19,7 +19,9 @@ from backend.config import Settings, get_settings
 from backend.database import get_supabase_client
 from backend.schemas.common import TransactionStatus
 from backend.schemas.webhooks import WebhookResponse
-from backend.services.payfast import encode_payfast_fields, payfast_signature, verify_payfast_signature
+from backend.services.payfast import payfast_signature, verify_payfast_signature
+from backend.services.solana import mint_ticket
+from backend.services.ledger import append_ownership_history
 from backend.routes.webhooks import _process_webhook_settlement
 
 logger = logging.getLogger(__name__)
@@ -71,18 +73,10 @@ async def create_checkout(
         raise HTTPException(status_code=403, detail="Payment does not belong to this account.")
     if tx.get("provider") != "payfast" or tx.get("status") != TransactionStatus.PENDING.value:
         raise HTTPException(status_code=409, detail="Payment is not a pending PayFast checkout.")
-    if not tx.get("listing_id"):
-        raise HTTPException(
-            status_code=409,
-            detail="Primary ticket minting is not enabled for PayFast until the EventPass program is deployed.",
-        )
-
-    fields = _base_fields(
-        settings,
-        payment_reference,
-        int(tx["amount"]),
-        f"EventPass resale {payment_reference}",
-    )
+    item_name = f"EventPass purchase {payment_reference}"
+    if tx.get("listing_id"):
+        item_name = f"EventPass resale {payment_reference}"
+    fields = _base_fields(settings, payment_reference, int(tx["amount"]), item_name)
     action = (
         "https://sandbox.payfast.co.za/eng/process"
         if settings.payfast_sandbox
@@ -182,9 +176,69 @@ async def receive_itn(
             detail="Primary ticket minting is not enabled until the EventPass program is deployed.",
         )
 
-    return _process_webhook_settlement(
-        db=db,
-        background_tasks=background_tasks,
+    if tx.get("listing_id"):
+        return _process_webhook_settlement(
+            db=db,
+            background_tasks=background_tasks,
+            payment_reference=payment_reference,
+            is_success=True,
+        )
+
+    tickets = (
+        db.table("tickets")
+        .select("*")
+        .eq("order_reference", payment_reference)
+        .execute()
+        .data or []
+    )
+    if not tickets:
+        raise HTTPException(status_code=404, detail="No tickets are attached to this payment.")
+    event_response = db.table("events").select("*").eq("id", tickets[0]["event_id"]).execute()
+    if not event_response.data:
+        raise HTTPException(status_code=404, detail="Ticket event was not found.")
+    event = event_response.data[0]
+    metadata_base = f"{settings.app_public_url.rstrip('/')}/api/tickets"
+    for ticket in tickets:
+        if ticket.get("asset_address"):
+            continue
+        try:
+            asset_address, signature = await mint_ticket(
+                event_id=str(event["id"]),
+                ticket_id=str(ticket["id"]),
+                name=f"{event['title']} Ticket",
+                uri=f"{metadata_base}/{ticket['id']}/metadata.json",
+                owner_wallet=ticket["owner_wallet"],
+                settings=settings,
+            )
+            db.table("tickets").update({
+                "asset_address": asset_address,
+                "status": "issued",
+            }).eq("id", ticket["id"]).execute()
+            append_ownership_history(
+                db=db,
+                ticket_id=ticket["id"],
+                action="issued",
+                from_wallet=event.get("organizer_wallet"),
+                to_wallet=ticket["owner_wallet"],
+                reference=payment_reference,
+            )
+            logger.info(
+                "PayFast ticket minted ticket_id=%s asset=%s signature=%s",
+                ticket["id"], asset_address, signature,
+            )
+        except Exception as exc:
+            logger.exception("PayFast ticket mint failed ticket_id=%s", ticket["id"])
+            raise HTTPException(
+                status_code=503,
+                detail=f"Payment was verified, but ticket minting is pending reconciliation for {ticket['id']}.",
+            ) from exc
+
+    db.table("transactions").update({"status": TransactionStatus.SETTLED.value}).eq(
+        "payment_reference", payment_reference
+    ).execute()
+    return WebhookResponse(
+        status="settled",
         payment_reference=payment_reference,
-        is_success=True,
+        ticket_id=tickets[0]["id"],
+        idempotent=False,
     )
