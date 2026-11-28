@@ -321,8 +321,8 @@ export default function App() {
                 Curated Live Experiences
               </h1>
               <p className="text-sm text-white/70 mt-2 max-w-2xl">
-                Every pass is minted individually on Solana Devnet with organizer price-cap
-                protection, 75% unsold-ticket refund security, and instant QR rotation on resale.
+                Explore simulated ticketing, capped resale, refund rules, and QR rotation. Checkout and
+                ticket issuance are demo flows; no payment or blockchain transaction is processed.
               </p>
             </div>
           </div>
@@ -466,6 +466,7 @@ export default function App() {
           order={checkout.order}
           api={api}
           onConfirm={handleConfirmMockPayment}
+          onCancel={closeCheckout}
           onClose={closeCheckout}
         />
       )}
