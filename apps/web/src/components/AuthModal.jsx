@@ -12,7 +12,6 @@ export function AuthModal({ isOpen, contextMessage, onClose, onRequestOtp, onVer
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [resendSeconds, setResendSeconds] = useState(0);
-  const [developmentCode, setDevelopmentCode] = useState("");
   const inputRefs = useRef([]);
 
   useEffect(() => {
@@ -23,7 +22,6 @@ export function AuthModal({ isOpen, contextMessage, onClose, onRequestOtp, onVer
     setError("");
     setBusy(false);
     setResendSeconds(0);
-    setDevelopmentCode("");
   }, [isOpen]);
 
   useEffect(() => {
@@ -48,7 +46,6 @@ export function AuthModal({ isOpen, contextMessage, onClose, onRequestOtp, onVer
       setStep("verify");
       setDigits(EMPTY_CODE);
       setResendSeconds(60);
-      setDevelopmentCode(result?.dev_sandbox_otp || "");
       if (resend) inputRefs.current[0]?.focus();
     } catch (requestError) {
       setError(requestError.message || "We couldn't send your code. Check your email and try again.");
@@ -231,11 +228,7 @@ export function AuthModal({ isOpen, contextMessage, onClose, onRequestOtp, onVer
                     ))}
                   </div>
                   {error && <p role="alert" className="text-center text-xs font-medium text-[#FF9A62]">{error}</p>}
-                  {developmentCode && (
-                    <p className="rounded-xl border border-amber-300/15 bg-amber-300/[.06] px-3 py-2 text-center text-xs text-amber-100/80">
-                      Local development code: <span className="font-mono font-bold tracking-widest">{developmentCode}</span>
-                    </p>
-                  )}
+
                   <Button type="submit" variant="primary" fullWidth size="lg" disabled={busy || digits.some((digit) => !digit)}>
                     {busy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
                     {busy ? "Verifying code…" : "Verify & Log In"}
