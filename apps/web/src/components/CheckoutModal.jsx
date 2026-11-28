@@ -1,7 +1,7 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { CreditCard, LoaderCircle, X, Zap } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "./Button";
 import { QrCodeMatrix } from "./QrCodeMatrix";
 
@@ -20,7 +20,6 @@ export function CheckoutModal({ event, quantity, order, api, onConfirm, onCancel
   const [busy, setBusy] = useState(false);
   const [receipt, setReceipt] = useState(null);
   const [error, setError] = useState("");
-  const [payTo, setPayTo] = useState("");
   const [usdcAmount, setUsdcAmount] = useState("0.00");
   const reference = order?.order_reference || "demo";
   const ticket = order?.tickets?.[0];
@@ -31,7 +30,6 @@ export function CheckoutModal({ event, quantity, order, api, onConfirm, onCancel
     api(`/api/checkout/config?amount_zar=${encodeURIComponent(order.total_zar)}`)
       .then((config) => {
         if (!cancelled) {
-          setPayTo(config.x402_pay_to_address);
           setUsdcAmount(config.amount_usdc || "0.00");
         }
       })
@@ -40,24 +38,6 @@ export function CheckoutModal({ event, quantity, order, api, onConfirm, onCancel
       cancelled = true;
     };
   }, [api, method, order]);
-
-  const copyEftDetails = async () => {
-    const details = [
-      "EventPass Treasury",
-      "Bank: FNB",
-      "Account Number: 62000000000",
-      "Branch Code: 250655",
-      `Reference: EVT-${ticket?.id || "pending"}`,
-    ].join("\n");
-    try {
-      await navigator.clipboard.writeText(details);
-      setError("");
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1800);
-    } catch {
-      setError("Clipboard access is unavailable in this browser.");
-    }
-  };
 
   const simulatePayment = async () => {
     if (!ticket) return;
@@ -174,7 +154,8 @@ export function CheckoutModal({ event, quantity, order, api, onConfirm, onCancel
                   <button
                     key={item.id}
                     type="button"
-                    disabled={busy}\n                    onClick={() => { setMethod(item.id); setError(""); }}
+                    disabled={busy}
+                    onClick={() => { setMethod(item.id); setError(""); }}
                     className={`flex-1 rounded-xl px-2 py-2.5 text-xs font-semibold transition-colors ${
                       method === item.id
                         ? "bg-white/10 text-white shadow-inner"
@@ -189,17 +170,8 @@ export function CheckoutModal({ event, quantity, order, api, onConfirm, onCancel
               {method === "eft" && (
                 <div className="space-y-4">
                   <div className="rounded-2xl border border-white/10 bg-white/[.045] p-4">
-                    <p className="text-xs font-semibold uppercase tracking-wider text-white/50">Beneficiary</p>
-                    <p className="mt-1 text-base font-semibold text-white">EventPass Treasury</p>
-                    <dl className="mt-4 grid grid-cols-[1fr_auto] gap-y-2 text-sm">
-                      <dt className="text-white/50">Bank</dt><dd className="text-right text-white/90">FNB</dd>
-                      <dt className="text-white/50">Account number</dt><dd className="font-mono text-white/90">62000000000</dd>
-                      <dt className="text-white/50">Branch code</dt><dd className="font-mono text-white/90">250655</dd>
-                      <dt className="text-white/50">Reference</dt><dd className="font-mono text-right text-white/90">EVT-{ticket?.id || "…"}</dd>
-                    </dl>
-                    <Button className="mt-4" variant="glass" fullWidth onClick={copyEftDetails}>
-                      <Copy className="h-3.5 w-3.5" /> {copied ? "Details Copied" : "Copy Details"}
-                    </Button>
+                    <p className="text-xs font-semibold uppercase tracking-wider text-white/50">EFT demo</p>
+                    <p className="mt-2 text-sm text-white/75">No bank transfer is requested for this demo.</p>
                   </div>
                   <Button variant="primary" size="lg" fullWidth disabled={busy || !ticket} onClick={simulatePayment}>
                     {busy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}
