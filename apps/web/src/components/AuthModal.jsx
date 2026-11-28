@@ -42,7 +42,9 @@ export function AuthModal({ isOpen, contextMessage, onClose, onRequestOtp, onVer
     setBusy(true);
     setError("");
     try {
-      const result = await onRequestOtp(email);
+      const normalizedEmail = email.trim();
+      const result = await onRequestOtp(normalizedEmail);
+      setEmail(normalizedEmail);
       setStep("verify");
       setDigits(EMPTY_CODE);
       setResendSeconds(60);
@@ -101,7 +103,7 @@ export function AuthModal({ isOpen, contextMessage, onClose, onRequestOtp, onVer
     setBusy(true);
     setError("");
     try {
-      await onVerifyOtp(email, digits.join(""));
+      await onVerifyOtp(email.trim(), digits.join(""));
     } catch (verifyError) {
       setError(verifyError.message || "Invalid code. Check the 6 digits and try again.");
       setDigits(EMPTY_CODE);
@@ -149,7 +151,7 @@ export function AuthModal({ isOpen, contextMessage, onClose, onRequestOtp, onVer
                   </p>
                 </div>
               </div>
-              <Button variant="ghost" size="sm" onClick={onClose} aria-label="Close sign-in">
+              <Button variant="ghost" size="sm" onClick={onClose} disabled={busy} aria-label="Close sign-in">
                 <X className="h-4 w-4" />
               </Button>
             </div>
@@ -175,6 +177,7 @@ export function AuthModal({ isOpen, contextMessage, onClose, onRequestOtp, onVer
                       autoComplete="email"
                       required
                       autoFocus
+                      disabled={busy}
                       value={email}
                       onChange={(event) => { setEmail(event.target.value); setError(""); }}
                       placeholder="you@example.com"
@@ -202,6 +205,7 @@ export function AuthModal({ isOpen, contextMessage, onClose, onRequestOtp, onVer
                 >
                   <button
                     type="button"
+                    disabled={busy}
                     onClick={() => { setStep("email"); setDigits(EMPTY_CODE); setError(""); }}
                     className="inline-flex items-center gap-1.5 text-xs font-medium text-white/55 transition-colors hover:text-white"
                   >
@@ -216,6 +220,7 @@ export function AuthModal({ isOpen, contextMessage, onClose, onRequestOtp, onVer
                         type="text"
                         inputMode="numeric"
                         autoComplete={index === 0 ? "one-time-code" : "off"}
+                        disabled={busy}
                         pattern="[0-9]*"
                         maxLength={index === 0 ? 6 : 1}
                         value={digit}
