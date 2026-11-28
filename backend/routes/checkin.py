@@ -1,7 +1,8 @@
 """Gate staff QR validation and atomic single-use check-in routes."""
 
 from contextlib import nullcontext
-from datetime import datetime, timezone\nimport logging
+from datetime import datetime, timezone
+import logging
 from typing import Any, Dict, List
 import uuid
 
@@ -13,9 +14,11 @@ from backend.database import get_supabase_client
 from backend.schemas.checkin import CheckInRequest, CheckInResponse
 from backend.schemas.common import TicketStatus
 from backend.services.credentials import verify_qr_credential
-from backend.services.ledger import append_audit_log, append_ownership_history\nfrom backend.services.solana import check_in_ticket
+from backend.services.ledger import append_audit_log, append_ownership_history
+from backend.services.solana import check_in_ticket
 
-router = APIRouter(tags=["check-in"])\nlogger = logging.getLogger(__name__)
+router = APIRouter(tags=["check-in"])
+logger = logging.getLogger(__name__)
 
 
 @router.post("/api/check-in", response_model=CheckInResponse)
