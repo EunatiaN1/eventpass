@@ -200,6 +200,7 @@ async def check_in_ticket(
 
 async def _asset_from_record(settings: Settings, record_pda) -> str:
     from solana.rpc.async_api import AsyncClient
+    from solders.pubkey import Pubkey
 
     program_id = _program_id(settings)
     async with AsyncClient(settings.solana_rpc_url, commitment="confirmed", timeout=30) as client:
