@@ -176,7 +176,7 @@ async def mint_ticket(
 async def check_in_ticket(
     *, event_id: str, ticket_id: str, settings: Settings
 ) -> str:
-    from solana.rpc.commitment import Confirmed
+    from solana.rpc.async_api import AsyncClient
     from solders.instruction import AccountMeta, Instruction
     from solders.pubkey import Pubkey
     from solders.message import Message
