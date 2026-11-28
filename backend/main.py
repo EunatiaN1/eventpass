@@ -19,10 +19,8 @@ from backend.routes.checkin import router as checkin_router
 from backend.routes.events import router as events_router
 from backend.routes.ledger import router as ledger_router
 from backend.routes.payfast import router as payfast_router
-from backend.routes.mock_payments import router as mock_payments_router
 from backend.routes.tickets import router as tickets_router
 from backend.routes.webhooks import router as webhooks_router
-from backend.routes.x402 import router as x402_router
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
@@ -125,10 +123,8 @@ app.include_router(tickets_router)
 app.include_router(campaigns_router)
 app.include_router(checkin_router)
 app.include_router(ledger_router)
-app.include_router(mock_payments_router)
 app.include_router(webhooks_router)
 app.include_router(payfast_router)
-app.include_router(x402_router)
 
 # ---------------------------------------------------------------------------
 # Static files & SPA catch-all
