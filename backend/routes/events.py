@@ -125,11 +125,6 @@ async def update_resale_config(
     db: Any = Depends(get_supabase_client),
 ) -> Dict[str, Any]:
     """Update organizer resale settings (toggle resale, price cap, markup, cutoff)."""
-    from solders.pubkey import Pubkey
-    try:
-        Pubkey.from_string(payload.buyer_wallet)
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail="Buyer must connect a valid Solana wallet before checkout.") from exc
     ev_resp = db.table("events").select("*").eq("id", event_id).execute()
     if not ev_resp.data:
         raise HTTPException(status_code=404, detail="Event not found.")
@@ -163,6 +158,11 @@ async def purchase_primary_tickets(
         raise HTTPException(
             status_code=403, detail="buyer_wallet must match authenticated user."
         )
+    from solders.pubkey import Pubkey
+    try:
+        Pubkey.from_string(payload.buyer_wallet)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail="Buyer must connect a valid Solana wallet before checkout.") from exc
     ev_resp = db.table("events").select("*").eq("id", event_id).execute()
     if not ev_resp.data:
         raise HTTPException(status_code=404, detail="Event not found.")
@@ -191,7 +191,7 @@ async def purchase_primary_tickets(
             "created_at": now,
         }
         db.table("tickets").insert(ticket_row).execute()
-        created_tickets.append({**ticket_row, "qr_token": qr_token, "unit_index": idx + 1})
+        created_tickets.append({**ticket_row, "unit_index": idx + 1})
 
     db.table("transactions").insert(
         {
