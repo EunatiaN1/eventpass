@@ -96,7 +96,7 @@ async def request_otp(
             ).execute()
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Email delivery is temporarily unavailable. Please try again.",
+                detail=str(exc),
             ) from exc
     else:
         db.table("otp_challenges").update({"consumed": True}).eq(
