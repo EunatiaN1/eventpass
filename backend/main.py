@@ -1,5 +1,6 @@
 """FastAPI entry point for the EventPass backend – production-hardened."""
 
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Request
@@ -23,6 +24,27 @@ from backend.routes.webhooks import router as webhooks_router
 from backend.routes.x402 import router as x402_router
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    """Refuse unsafe production defaults before serving any request."""
+    if settings.environment == "production":
+        missing = []
+        if settings.use_dev_store:
+            missing.append("SUPABASE_URL and SUPABASE_KEY")
+        if not settings.resend_api_key:
+            missing.append("RESEND_API_KEY")
+        if (
+            settings.jwt_secret == "devnet-jwt-secret-change-in-production-min-32-chars"
+            or len(settings.jwt_secret) < 32
+        ):
+            missing.append("a unique JWT_SECRET of at least 32 characters")
+        if missing:
+            raise RuntimeError(
+                "Production backend configuration is incomplete: " + ", ".join(missing)
+            )
+    yield
 
 
 # ---------------------------------------------------------------------------
@@ -58,6 +80,7 @@ app = FastAPI(
         "double-entry ledger, fiat webhooks, and x402 agent payments (Solana Devnet)."
     ),
     version="0.3.0",
+    lifespan=lifespan,
     # Never expose OpenAPI docs in production
     docs_url="/docs" if settings.debug else None,
     redoc_url="/redoc" if settings.debug else None,
@@ -80,6 +103,7 @@ app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.allowed_origins,
+    allow_origin_regex=settings.allowed_origin_regex or None,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type", "PAYMENT-SIGNATURE", "X-Auth-Client"],

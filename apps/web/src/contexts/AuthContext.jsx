@@ -4,9 +4,10 @@ import { apiUrl } from "../lib/apiUrl";
 const AuthContext = createContext(null);
 
 async function authRequest(path, options = {}) {
+  const url = apiUrl(path);
   let response;
   try {
-    response = await fetch(apiUrl(path), {
+    response = await fetch(url, {
       ...options,
       credentials: "include",
       headers: {

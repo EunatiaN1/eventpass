@@ -2,7 +2,8 @@ import * as SecureStore from "expo-secure-store";
 import { createContext, PropsWithChildren, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { Platform } from "react-native";
 
-const API_BASE = (process.env.EXPO_PUBLIC_API_URL || "http://localhost:8001").replace(/\/$/, "");
+const CONFIGURED_API_BASE = process.env.EXPO_PUBLIC_API_URL?.trim().replace(/\/$/, "") || "";
+const API_BASE = CONFIGURED_API_BASE || (Platform.OS === "web" ? "" : "http://localhost:8001");
 const TOKEN_KEY = "eventpass.session.jwt";
 
 export type EventPassUser = {
@@ -26,6 +27,12 @@ type AuthContextValue = {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 function errorMessage(status: number, detail?: unknown) {
+  if (status === 404) {
+    return "EventPass API route not found. Check that EXPO_PUBLIC_API_URL points to your deployed FastAPI service.";
+  }
+  if (status >= 500) {
+    return "EventPass server error. Check the backend logs and its database and email settings.";
+  }
   if (typeof detail === "string" && detail) return detail;
   if (status === 410) return "Code expired. Request a new one.";
   if (status === 429) return "Too many attempts. Wait a moment and try again.";
@@ -35,6 +42,11 @@ function errorMessage(status: number, detail?: unknown) {
 }
 
 async function fetchApi<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  if (!API_BASE) {
+    throw new Error(
+      "EventPass API URL is missing. Set EXPO_PUBLIC_API_URL to your deployed FastAPI HTTPS URL in Vercel, then redeploy.",
+    );
+  }
   const { token, headers, ...requestOptions } = options;
   let response: Response;
   try {
