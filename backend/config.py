@@ -31,6 +31,7 @@ class Settings(BaseSettings):
     jwt_expire_minutes: int = 60 * 24
 
     # Strict CORS allowlist (never ["*"])
+    allowed_origin_regex: str = ""
     allowed_origins: List[str] = [
         "http://localhost:8081",
         "http://127.0.0.1:8000",
