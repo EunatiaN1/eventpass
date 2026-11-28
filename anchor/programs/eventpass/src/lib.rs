@@ -23,7 +23,8 @@ pub mod eventpass {
         require_keys_eq!(ctx.accounts.authority.key(), organizer, EventPassError::Unauthorized);
         let event = &mut ctx.accounts.event;
         event.event_id = event_id;
-        event.authority = organizer;
+        event.authority = ctx.accounts.authority.key();
+        event.organizer = organizer;
         event.bump = ctx.bumps.event;
         Ok(())
     }
@@ -76,7 +77,7 @@ pub mod eventpass {
         event_id: String,
         ticket_id: String,
     ) -> Result<()> {
-        require_keys_eq!(ctx.accounts.scanner.key(), ctx.accounts.event.authority, EventPassError::Unauthorized);
+        require_keys_eq!(ctx.accounts.scanner.key(), ctx.accounts.event.organizer, EventPassError::Unauthorized);
         require_keys_eq!(ctx.accounts.ticket_record.event, ctx.accounts.event.key(), EventPassError::WrongEvent);
         require_keys_eq!(ctx.accounts.ticket_record.asset, ctx.accounts.asset.key(), EventPassError::WrongAsset);
         require_keys_eq!(ctx.accounts.ticket_record.owner, ctx.accounts.asset.owner, EventPassError::WrongOwner);
@@ -147,7 +148,7 @@ pub struct EventPassEvent {
     pub bump: u8,
 }
 impl EventPassEvent {
-    pub const SPACE: usize = 8 + 4 + 64 + 32 + 1;
+    pub const SPACE: usize = 8 + 4 + 64 + 32 + 32 + 1;
 }
 
 #[account]
